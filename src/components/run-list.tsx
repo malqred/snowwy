@@ -9,10 +9,12 @@ import { Card } from './ui';
 type Props = {
   runs: Segment[];
   onPress?: (run: Segment) => void;
+  /** Подписи к лучшим спускам: номер спуска → текст */
+  badges?: Record<number, string>;
 };
 
 /** Список спусков: номер, время, перепад и расстояние, максимальная скорость. */
-export function RunList({ runs, onPress }: Props) {
+export function RunList({ runs, onPress, badges }: Props) {
   const t = useTheme();
   return (
     <Card>
@@ -40,6 +42,7 @@ export function RunList({ runs, onPress }: Props) {
                 {time(run.startedAt)} · {clock(run.duration)}
                 {run.open ? ' · идёт' : ''}
               </Text>
+              {badges?.[run.n] ? <Text style={[styles.badgeNote, { color: t.text }]}>{badges[run.n]}</Text> : null}
             </View>
             <View style={styles.right}>
               <Text style={[styles.speed, { color: t.text }]}>{kmh(run.maxSpeed)}</Text>
@@ -74,6 +77,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, gap: 2 },
   main: { fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
   sub: { fontSize: 13, fontVariant: ['tabular-nums'] },
+  badgeNote: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   right: { alignItems: 'flex-end', gap: 2 },
   speed: { fontSize: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
   chevron: { fontSize: 22, marginLeft: -4 },

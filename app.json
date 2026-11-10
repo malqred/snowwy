@@ -12,7 +12,9 @@
       "supportsTablet": false,
       "infoPlist": {
         "CFBundleDevelopmentRegion": "ru",
-        "CFBundleLocalizations": ["ru"],
+        "CFBundleLocalizations": [
+          "ru"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -42,7 +44,26 @@
         }
       ],
       "expo-sqlite",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "app.snowwy.tracker.widgets",
+          "groupIdentifier": "group.app.snowwy.tracker"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Snowwy использует барометр телефона, чтобы точнее считать перепад высот на спусках."
+        }
+      ]
     ],
     "experiments": {
       "reactCompiler": true

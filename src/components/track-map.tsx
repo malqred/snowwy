@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import MapView, { Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 
-import type { MapLine } from '@/lib/lines';
+import type { Coord, MapLine } from '@/lib/lines';
 import { useTheme } from '@/theme';
 
 type Props = {
   lines: MapLine[];
   /** Следить за текущим положением (во время записи) вместо показа всего трека */
   live?: boolean;
+  /** Точка на треке — положение при повторе спуска */
+  marker?: Coord | null;
   style?: StyleProp<ViewStyle>;
 };
 
 const PADDING = { top: 36, right: 36, bottom: 36, left: 36 };
 
-export function TrackMap({ lines, live = false, style }: Props) {
+export function TrackMap({ lines, live = false, marker, style }: Props) {
   const t = useTheme();
   const map = useRef<MapView>(null);
   const [satellite, setSatellite] = useState(false);
@@ -54,6 +56,11 @@ export function TrackMap({ lines, live = false, style }: Props) {
             lineJoin="round"
           />
         ))}
+        {marker ? (
+          <Marker coordinate={marker} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+            <View style={[styles.marker, { backgroundColor: t.text, borderColor: t.bg }]} />
+          </Marker>
+        ) : null}
       </MapView>
       <Pressable
         onPress={() => setSatellite((v) => !v)}
@@ -84,4 +91,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleText: { fontSize: 13, fontWeight: '600' },
+  marker: { width: 18, height: 18, borderRadius: 9, borderWidth: 3 },
 });

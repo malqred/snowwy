@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
@@ -8,10 +8,11 @@ import { RunList } from '@/components/run-list';
 import { ShareCard } from '@/components/share-card';
 import { TrackMap } from '@/components/track-map';
 import { Button, Label, StatGrid } from '@/components/ui';
-import { deleteSession } from '@/lib/db';
+import { deleteSession, listSessions } from '@/lib/db';
 import { date, distance, int, kmh, runsWord, span, time } from '@/lib/format';
 import { writeGpx } from '@/lib/gpx';
 import { sessionLines } from '@/lib/lines';
+import { findRecords, runBadges } from '@/lib/records';
 import { useSession } from '@/lib/use-session';
 import { space, useTheme } from '@/theme';
 
@@ -22,6 +23,25 @@ export default function SessionScreen() {
   const data = useSession(id);
   const card = useRef<ComponentRef<typeof View>>(null);
   const [sharing, setSharing] = useState(false);
+  const [held, setHeld] = useState<string[]>([]);
+
+  // Какие личные рекорды поставлены в этот день (если есть с чем сравнивать)
+  useEffect(() => {
+    let active = true;
+    listSessions()
+      .then((list) => {
+        if (!active || list.length < 2) return;
+        setHeld(
+          findRecords(list)
+            .filter((r) => r.sessionId === id)
+            .map((r) => r.label.toLowerCase())
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   if (data === undefined) {
     return (
@@ -91,6 +111,9 @@ export default function SessionScreen() {
         <Text style={[styles.heroSub, { color: t.sub }]}>
           {time(session.startedAt)}–{time(session.endedAt ?? session.startedAt)} · {span(total)}
         </Text>
+        {held.length > 0 ? (
+          <Text style={[styles.record, { color: t.text }]}>Личный рекорд: {held.join(', ')}</Text>
+        ) : null}
       </View>
 
       <TrackMap lines={sessionLines(points, segments, t)} style={styles.map} />
@@ -111,7 +134,7 @@ export default function SessionScreen() {
       {runs.length > 0 ? (
         <View style={styles.section}>
           <Label>Спуски</Label>
-          <RunList runs={runs} onPress={(run) => router.push(`/session/${id}/run/${run.n}`)} />
+          <RunList runs={runs} badges={runBadges(runs)} onPress={(run) => router.push(`/session/${id}/run/${run.n}`)} />
         </View>
       ) : (
         <Text style={[styles.note, { color: t.sub }]}>
@@ -147,6 +170,7 @@ const styles = StyleSheet.create({
   heroValue: { fontSize: 56, fontWeight: '700', letterSpacing: -1.5, fontVariant: ['tabular-nums'] },
   heroLabel: { fontSize: 20, fontWeight: '500', letterSpacing: 0 },
   heroSub: { fontSize: 15, fontVariant: ['tabular-nums'] },
+  record: { fontSize: 15, fontWeight: '600', lineHeight: 21, marginTop: 6 },
   map: { height: 300 },
   section: { gap: space.s },
   note: { fontSize: 15, lineHeight: 21 },

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, Label, StatGrid, Title } from '@/components/ui';
 import { listSessions } from '@/lib/db';
+import { findRecords } from '@/lib/records';
 import { date, dateIso, int, km, kmh, runsWord, seasonOf, seasonTitle, span } from '@/lib/format';
 import type { Session } from '@/lib/types';
 import { space, useTheme } from '@/theme';
@@ -66,6 +67,7 @@ export default function HistoryScreen() {
   );
 
   const seasons = groupBySeason(sessions ?? []);
+  const records = findRecords(sessions ?? []);
 
   return (
     <ScrollView
@@ -80,6 +82,35 @@ export default function HistoryScreen() {
           <Text style={[styles.emptyText, { color: t.sub }]}>
             Здесь появятся ваши дни катания.{'\n'}Чтобы посмотреть, как это выглядит, добавьте демо-катание в настройках.
           </Text>
+        </View>
+      ) : null}
+
+      {records.length > 0 ? (
+        <View style={styles.list}>
+          <Label>Личные рекорды</Label>
+          <Card>
+            {records.map((r, i) => (
+              <Pressable
+                key={r.key}
+                onPress={() => router.push(`/session/${r.sessionId}`)}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.row,
+                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line },
+                  pressed && { opacity: 0.6 },
+                ]}>
+                <View style={styles.rowBody}>
+                  <Text style={[styles.rowTitle, { color: t.text }]}>{r.label}</Text>
+                  <Text style={[styles.rowSub, { color: t.sub }]}>{date(r.startedAt)}</Text>
+                </View>
+                <Text style={[styles.recordValue, { color: t.text }]}>
+                  {r.value}
+                  {r.unit ? <Text style={[styles.rowSub, { color: t.sub }]}> {r.unit}</Text> : null}
+                </Text>
+                <Text style={[styles.chevron, { color: t.sub }]}>›</Text>
+              </Pressable>
+            ))}
+          </Card>
         </View>
       ) : null}
 
@@ -143,4 +174,5 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 17, fontWeight: '600' },
   rowSub: { fontSize: 13, fontVariant: ['tabular-nums'] },
   chevron: { fontSize: 22 },
+  recordValue: { fontSize: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

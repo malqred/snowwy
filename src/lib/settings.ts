@@ -8,10 +8,12 @@ export type Settings = {
   theme: ThemeMode;
   /** Не гасить экран во время записи */
   keepAwake: boolean;
+  /** Напоминать о забытой записи и завершать её после долгого простоя */
+  remind: boolean;
 };
 
 const KEY = 'settings';
-const DEFAULTS: Settings = { theme: 'system', keepAwake: true };
+const DEFAULTS: Settings = { theme: 'system', keepAwake: true, remind: true };
 
 function load(): Settings {
   try {

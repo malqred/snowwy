@@ -10,7 +10,15 @@ import { TrackMap } from '@/components/track-map';
 import { Button, Label, StatGrid, Title } from '@/components/ui';
 import { clock, distance, int, kmh, num, runsWord, span } from '@/lib/format';
 import { sessionLines } from '@/lib/lines';
-import { getLivePoints, startRecording, stopRecording, useTracker } from '@/lib/tracker';
+import {
+  elapsedSeconds,
+  getLivePoints,
+  pauseRecording,
+  resumeRecording,
+  startRecording,
+  stopRecording,
+  useTracker,
+} from '@/lib/tracker';
 import type { LiveState } from '@/lib/types';
 import { space, useTheme } from '@/theme';
 
@@ -42,6 +50,19 @@ export default function RideScreen() {
     const error = await startRecording();
     setBusy(false);
     if (error) Alert.alert('Не удалось начать', error);
+  };
+
+  const togglePause = async () => {
+    if (busy) return;
+    setBusy(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (tracker.paused) {
+      const error = await resumeRecording();
+      if (error) Alert.alert('Не удалось продолжить', error);
+    } else {
+      await pauseRecording();
+    }
+    setBusy(false);
   };
 
   const stop = () => {
@@ -93,9 +114,10 @@ export default function RideScreen() {
   const { analysis, last } = tracker;
   const { totals } = analysis;
   const runs = analysis.segments.filter((s) => s.kind === 'run').reverse();
-  const elapsed = tracker.startedAt ? (now - tracker.startedAt) / 1000 : 0;
+  const { paused } = tracker;
+  const elapsed = elapsedSeconds(tracker, now);
   const d = distance(totals.distance);
-  const state: LiveState = last ? analysis.state : 'pause';
+  const state: LiveState = last && !paused ? analysis.state : 'pause';
   const lines = sessionLines(getLivePoints(), analysis.segments, t);
 
   return (
@@ -106,7 +128,9 @@ export default function RideScreen() {
       <View style={styles.liveHead}>
         <View style={[styles.pill, { borderColor: t.line }]}>
           <View style={[styles.dot, { backgroundColor: state === 'pause' ? t.sub : t.danger }]} />
-          <Text style={[styles.pillText, { color: t.text }]}>{last ? STATE_TITLE[state] : 'Ищем GPS…'}</Text>
+          <Text style={[styles.pillText, { color: t.text }]}>
+            {paused ? 'На паузе' : last ? STATE_TITLE[state] : 'Ищем GPS…'}
+          </Text>
         </View>
         <Text style={[styles.timer, { color: t.text }]}>{clock(elapsed)}</Text>
       </View>
@@ -127,7 +151,24 @@ export default function RideScreen() {
         ]}
       />
 
-      <TrackMap lines={lines} live style={styles.map} />
+      <View style={styles.actions}>
+        <Button
+          title={paused ? 'Продолжить' : 'Пауза'}
+          kind={paused ? 'primary' : 'secondary'}
+          onPress={togglePause}
+          disabled={busy}
+          style={styles.action}
+        />
+        <Button title="Завершить" kind="secondary" onPress={stop} disabled={busy} style={styles.action} />
+      </View>
+
+      {paused ? (
+        <Text style={[styles.note, { color: t.sub }]}>
+          Запись на паузе: геопозиция выключена, время и расстояние не считаются.
+        </Text>
+      ) : null}
+
+      <TrackMap lines={lines} live={!paused} style={styles.map} />
 
       {runs.length > 0 ? (
         <View style={styles.section}>
@@ -136,15 +177,16 @@ export default function RideScreen() {
         </View>
       ) : null}
 
-      {!tracker.background ? (
+      {!tracker.background && !paused ? (
         <Text style={[styles.note, { color: t.sub }]}>
           Запись идёт, пока приложение открыто и экран включён. Не сворачивайте Snowwy и не блокируйте телефон.
         </Text>
       ) : null}
 
-      <Button title="Завершить катание" kind="secondary" onPress={stop} disabled={busy} />
-      {last ? (
-        <Text style={[styles.gps, { color: t.sub }]}>Точность GPS ±{num(last.acc)} м</Text>
+      {last && !paused ? (
+        <Text style={[styles.gps, { color: t.sub }]}>
+          Точность GPS ±{num(last.acc)} м{tracker.barometer ? ' · высота по барометру' : ''}
+        </Text>
       ) : null}
     </ScrollView>
   );
@@ -182,6 +224,8 @@ const styles = StyleSheet.create({
   heroValue: { fontSize: 112, fontWeight: '700', letterSpacing: -4, lineHeight: 116, fontVariant: ['tabular-nums'] },
   heroLabel: { fontSize: 17, fontWeight: '500', marginTop: -6 },
   map: { height: 240 },
+  actions: { flexDirection: 'row', gap: space.s },
+  action: { flex: 1 },
   section: { gap: space.s },
   note: { fontSize: 13, lineHeight: 18, textAlign: 'center', paddingHorizontal: space.m },
   gps: { fontSize: 12, textAlign: 'center' },

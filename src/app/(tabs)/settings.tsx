@@ -92,6 +92,21 @@ export default function SettingsScreen() {
             thumbColor={t.dark && settings.keepAwake ? t.inverse : undefined}
           />
         </Card>
+        <Card style={styles.switchRow}>
+          <View style={styles.switchBody}>
+            <Text style={[styles.rowTitle, { color: t.text }]}>Напоминать о записи</Text>
+            <Text style={[styles.rowSub, { color: t.sub }]}>
+              Через полчаса без движения придёт уведомление, через два часа запись завершится сама. О паузе
+              напомним через час.
+            </Text>
+          </View>
+          <Switch
+            value={settings.remind}
+            onValueChange={(remind) => updateSettings({ remind })}
+            trackColor={{ true: t.text, false: t.line }}
+            thumbColor={t.dark && settings.remind ? t.inverse : undefined}
+          />
+        </Card>
       </View>
 
       <View style={styles.section}>

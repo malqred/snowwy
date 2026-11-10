@@ -38,6 +38,9 @@ export type Segment = {
   avgSpeed: number;
   maxSpeed: number;
   minSpeed: number;
+  /** Уклон, градусы: средний и на самом крутом отрезке */
+  avgSlope: number;
+  maxSlope: number;
   /** Сегмент ещё продолжается (последний в записи) */
   open: boolean;
 };
@@ -60,6 +63,9 @@ export type Totals = {
   liftTime: number;
   maxAlt: number;
   minAlt: number;
+  /** Самый длинный спуск, м, и самый большой перепад одного спуска, м. В старых записях их нет. */
+  longestRun?: number;
+  biggestRunVertical?: number;
 };
 
 export type Analysis = {

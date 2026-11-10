@@ -98,3 +98,53 @@ test('пустой и очень короткий трек не ломают а�
   assert.equal(analyze([]).segments.length, 0);
   assert.equal(analyze(generateDemoTrack(START, 1).slice(0, 2)).segments.length, 0);
 });
+
+/** Прямой спуск: step(скорость м/с, снижение м/с, секунды). */
+function track() {
+  const points = [];
+  let t = START;
+  let alt = 2000;
+  let lat = 43.6;
+  return {
+    points,
+    step(speed, drop, seconds) {
+      for (let i = 0; i < seconds; i++) {
+        alt -= drop;
+        lat += speed / 111320;
+        points.push({ t, lat, lon: 40.3, alt, speed, acc: 5 });
+        t += 1000;
+      }
+    },
+    jump(seconds, meters) {
+      t += seconds * 1000;
+      lat += meters / 111320;
+    },
+  };
+}
+
+test('считает средний и максимальный уклон', () => {
+  const tr = track();
+  tr.step(0, 0, 20);
+  tr.step(12, 3, 60); // 14°
+  tr.step(12, 6, 40); // 27°
+  tr.step(0, 0, 20);
+  const [run] = analyze(tr.points).segments.filter((s) => s.kind === 'run');
+  assert.ok(run.maxSlope > 24 && run.maxSlope < 29, `макс. уклон ${run.maxSlope}`);
+  assert.ok(run.avgSlope > 16 && run.avgSlope < 22, `ср. уклон ${run.avgSlope}`);
+  assert.ok(run.maxSlope > run.avgSlope);
+});
+
+test('пауза в записи не добавляет расстояние', () => {
+  const tr = track();
+  tr.step(0, 0, 20);
+  tr.step(12, 3, 60);
+  tr.jump(60, 2000); // минута без точек и скачок на два километра
+  tr.step(12, 3, 60);
+  tr.step(0, 0, 20);
+  const { segments, totals } = analyze(tr.points);
+  const runs = segments.filter((s) => s.kind === 'run');
+  assert.equal(runs.length, 1);
+  assert.ok(runs[0].distance > 1300 && runs[0].distance < 1700, `дистанция ${runs[0].distance}`);
+  assert.ok(runs[0].movingTime < 130, `время в движении ${runs[0].movingTime}`);
+  assert.ok(totals.longestRun === runs[0].distance);
+});

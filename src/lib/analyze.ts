@@ -13,6 +13,10 @@ const MOVING_SPEED = 0.6;
 const TRIM_SPEED = 1.5;
 /** Остановка или разрыв сигнала дольше этого делит спуск на два, с */
 const SPLIT_STOP = 240;
+/** Разрыв между точками дольше этого считается дырой в записи, с */
+const MAX_GAP = 30;
+/** Длина отрезка по горизонтали, на котором считается максимальный уклон, м */
+const SLOPE_WINDOW = 40;
 
 const R = 6371000;
 const RAD = Math.PI / 180;
@@ -132,17 +136,36 @@ function buildSegment(
   if (to - from < 2) return null;
 
   let distance = 0;
+  let flatDistance = 0;
   let movingTime = 0;
   let maxSpeed = 0;
+  // Пройденное по горизонтали от начала участка — для расчёта уклона
+  const flatAt = new Array<number>(to - from + 1).fill(0);
   for (let i = from + 1; i <= to; i++) {
     const a = points[i - 1];
     const b = points[i];
+    flatAt[i - from] = flatDistance;
     if (speedFast[i] > maxSpeed) maxSpeed = speedFast[i];
     if (speed[i] < MOVING_SPEED) continue;
+    // Через разрыв записи (пауза, потеря сигнала) расстояние не достраиваем
+    if (b.t - a.t > MAX_GAP * 1000) continue;
     const flat = haversine(a.lat, a.lon, b.lat, b.lon);
     const dAlt = alt[i] - alt[i - 1];
     distance += Math.sqrt(flat * flat + dAlt * dAlt);
+    flatDistance += flat;
+    flatAt[i - from] = flatDistance;
     movingTime += (b.t - a.t) / 1000;
+  }
+
+  // Максимальный уклон — на самом крутом отрезке длиной не меньше SLOPE_WINDOW
+  let maxSlope = 0;
+  let lo = from;
+  for (let hi = from + 1; hi <= to; hi++) {
+    while (lo + 1 < hi && flatAt[hi - from] - flatAt[lo + 1 - from] >= SLOPE_WINDOW) lo++;
+    const run = flatAt[hi - from] - flatAt[lo - from];
+    if (run < SLOPE_WINDOW) continue;
+    const slope = Math.atan2(Math.abs(alt[lo] - alt[hi]), run) / RAD;
+    if (slope > maxSlope) maxSlope = slope;
   }
 
   // Минимальная скорость — без разгона в начале и торможения в конце
@@ -176,6 +199,8 @@ function buildSegment(
     avgSpeed: movingTime > 0 ? distance / movingTime : 0,
     maxSpeed,
     minSpeed,
+    avgSlope: flatDistance > 0 ? Math.atan2(vertical, flatDistance) / RAD : 0,
+    maxSlope,
     open,
   };
 }
@@ -240,8 +265,12 @@ export function analyze(points: TrackPoint[]): Analysis {
   let runTime = 0;
   let runMoving = 0;
   let liftTime = 0;
+  let longestRun = 0;
+  let biggestRunVertical = 0;
   for (const s of segments) {
     if (s.kind === 'run') {
+      if (s.distance > longestRun) longestRun = s.distance;
+      if (s.vertical > biggestRunVertical) biggestRunVertical = s.vertical;
       distance += s.distance;
       vertical += s.vertical;
       runTime += s.duration;
@@ -276,6 +305,8 @@ export function analyze(points: TrackPoint[]): Analysis {
       liftTime,
       maxAlt,
       minAlt,
+      longestRun,
+      biggestRunVertical,
     },
     state,
     alt,
