@@ -1,0 +1,94 @@
+name: iOS (.ipa)
+
+# Собирает неподписанный Snowwy.ipa для установки через Sideloadly.
+# Запуск: вкладка Actions → «iOS (.ipa)» → Run workflow, либо автоматически при каждом push в main.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'tests/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-ipa
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Expo SDK 58 требует Xcode 26.4 или новее — берём самый свежий из установленных
+      - name: Выбрать Xcode
+        run: |
+          ls /Applications | grep -i xcode || true
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
+          xcodebuild -version
+
+      - name: Установить зависимости
+        run: npm ci
+
+      - name: Проверить алгоритм
+        run: npm test
+
+      - name: Сгенерировать проект Xcode
+        run: npx expo prebuild --platform ios
+
+      - name: Собрать приложение (без подписи)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          echo "Workspace: $WORKSPACE, scheme: $SCHEME"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Упаковать .ipa
+        run: |
+          APP=$(ls -d ios/build/Build/Products/Release-iphoneos/*.app | head -1)
+          test -f "$APP/main.jsbundle" || { echo "В приложении нет JS-бандла"; exit 1; }
+          mkdir -p out/Payload
+          cp -R "$APP" out/Payload/
+          cd out
+          zip -qry Snowwy.ipa Payload
+          ls -lh Snowwy.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Snowwy-ipa
+          path: out/Snowwy.ipa
+          retention-days: 30
+
+      # Релиз нужен, чтобы .ipa скачивался одним файлом, без распаковки архива
+      - name: Опубликовать в Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" out/Snowwy.ipa \
+            --title "Snowwy, сборка ${{ github.run_number }}" \
+            --notes "Неподписанный .ipa для установки через Sideloadly. Инструкция — в README." \
+            --target "${{ github.sha }}"

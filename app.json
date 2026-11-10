@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Snowwy",
+    "slug": "snowwy",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "snowwy",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "app.snowwy.tracker",
+      "supportsTablet": false,
+      "infoPlist": {
+        "CFBundleDevelopmentRegion": "ru",
+        "CFBundleLocalizations": ["ru"],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F2EFEA",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 160,
+          "dark": {
+            "backgroundColor": "#0D0D0D",
+            "image": "./assets/images/splash-icon-dark.png"
+          }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Snowwy использует геопозицию, чтобы записывать ваши спуски: скорость, расстояние и перепад высот.",
+          "locationAlwaysAndWhenInUsePermission": "Snowwy использует геопозицию в фоне, чтобы запись спусков продолжалась при заблокированном экране.",
+          "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      "expo-sqlite",
+      "expo-sharing"
+    ],
+    "experiments": {
+      "reactCompiler": true
+    }
+  }
+}
