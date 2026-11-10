@@ -6,9 +6,10 @@ name: iOS (.ipa)
 on:
   workflow_dispatch:
     inputs:
+      # macos-26 (arm64) быстрее, но на нём бывают долгие очереди
       runner:
         description: Образ macOS для сборки
-        default: macos-26
+        default: macos-26-intel
   push:
     branches: [main]
     paths-ignore:
@@ -19,12 +20,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: ios-ipa-${{ inputs.runner || 'macos-26' }}
+  group: ios-ipa-${{ inputs.runner || 'macos-26-intel' }}
   cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: ${{ inputs.runner || 'macos-26' }}
+    runs-on: ${{ inputs.runner || 'macos-26-intel' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
