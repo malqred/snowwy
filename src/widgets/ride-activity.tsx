@@ -1,14 +1,26 @@
 import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
-import { font, foregroundStyle, monospacedDigit, padding } from '@expo/ui/swift-ui/modifiers';
+import {
+  font,
+  foregroundStyle,
+  frame,
+  monospacedDigit,
+  multilineTextAlignment,
+  padding,
+  resizable,
+} from '@expo/ui/swift-ui/modifiers';
 import { createLiveActivity } from 'expo-widgets';
 
 /**
- * Данные для окна на экране блокировки.
+ * Данные для окна на экране блокировки и для островка.
  * Все значения уже отформатированы: внутри виджета нельзя вызывать функции приложения.
  */
 export type RideActivityProps = {
-  /** Начало катания, мс с начала эпохи — от него идёт таймер */
+  /** Начало отсчёта таймера, мс с начала эпохи (время старта, сдвинутое на паузы) */
   startedAt: number;
+  /** Время на момент паузы («12:34»). Пусто, пока запись идёт — тогда таймер идёт сам */
+  frozen: string;
+  /** Адрес файла со знаком приложения. Пусто — показываем значок лыжника */
+  icon: string;
   /** «Спуск», «Подъём», «Пауза» */
   state: string;
   /** Число спусков и слово к нему: «7» и «спусков» */
@@ -29,6 +41,39 @@ const RideActivity = (props: RideActivityProps) => {
   const muted = '#8E8E93';
   const started = new Date(props.startedAt);
 
+  // Знак приложения для островка
+  const logo = (size: number) =>
+    props.icon ? (
+      <Image uiImage={props.icon} modifiers={[resizable(), frame({ width: size, height: size })]} />
+    ) : (
+      <Image systemName="figure.skiing.downhill" size={size - 6} />
+    );
+
+  // Время катания: идёт само, на паузе стоит
+  const timer = (size: number, color: string, width: number) =>
+    props.frozen ? (
+      <Text modifiers={[font({ size }), monospacedDigit(), foregroundStyle(color)]}>{props.frozen}</Text>
+    ) : (
+      <Text
+        date={started}
+        dateStyle="timer"
+        modifiers={[
+          font({ size }),
+          monospacedDigit(),
+          foregroundStyle(color),
+          multilineTextAlignment('trailing'),
+          frame({ maxWidth: width }),
+        ]}
+      />
+    );
+
+  const stat = (label: string, value: string) => (
+    <VStack alignment="leading" spacing={2}>
+      <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(muted)]}>{label}</Text>
+      <Text modifiers={[font({ size: 17, weight: 'semibold' }), monospacedDigit()]}>{value}</Text>
+    </VStack>
+  );
+
   return {
     banner: (
       <VStack spacing={10} modifiers={[padding({ all: 16 })]}>
@@ -38,49 +83,36 @@ const RideActivity = (props: RideActivityProps) => {
           <Spacer />
           <VStack alignment="trailing" spacing={2}>
             <Text modifiers={[font({ size: 15, weight: 'semibold' })]}>{props.state}</Text>
-            <Text
-              date={started}
-              dateStyle="timer"
-              modifiers={[font({ size: 15 }), monospacedDigit(), foregroundStyle(muted)]}
-            />
+            {timer(15, muted, 90)}
           </VStack>
         </HStack>
         <HStack spacing={12}>
-          <VStack alignment="leading" spacing={2}>
-            <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(muted)]}>СКОРОСТЬ</Text>
-            <Text modifiers={[font({ size: 17, weight: 'semibold' }), monospacedDigit()]}>{props.speed} км/ч</Text>
-          </VStack>
+          {stat('СКОРОСТЬ', `${props.speed} км/ч`)}
           <Spacer />
-          <VStack alignment="leading" spacing={2}>
-            <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(muted)]}>МАКС.</Text>
-            <Text modifiers={[font({ size: 17, weight: 'semibold' }), monospacedDigit()]}>{props.maxSpeed} км/ч</Text>
-          </VStack>
+          {stat('МАКС.', `${props.maxSpeed} км/ч`)}
           <Spacer />
-          <VStack alignment="leading" spacing={2}>
-            <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(muted)]}>ДИСТАНЦИЯ</Text>
-            <Text modifiers={[font({ size: 17, weight: 'semibold' }), monospacedDigit()]}>{props.distance}</Text>
-          </VStack>
+          {stat('ДИСТАНЦИЯ', props.distance)}
           <Spacer />
-          <VStack alignment="leading" spacing={2}>
-            <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(muted)]}>ПЕРЕПАД</Text>
-            <Text modifiers={[font({ size: 17, weight: 'semibold' }), monospacedDigit()]}>{props.vertical}</Text>
-          </VStack>
+          {stat('ПЕРЕПАД', props.vertical)}
         </HStack>
       </VStack>
     ),
-    compactLeading: <Image systemName="figure.skiing.downhill" />,
-    compactTrailing: <Text modifiers={[monospacedDigit()]}>{props.runs}</Text>,
-    minimal: <Text modifiers={[monospacedDigit()]}>{props.runs}</Text>,
+    compactLeading: logo(24),
+    compactTrailing: timer(15, '#FFFFFF', 64),
+    minimal: logo(22),
     expandedLeading: (
-      <VStack alignment="leading" spacing={2} modifiers={[padding({ leading: 8 })]}>
-        <Text modifiers={[font({ size: 28, weight: 'bold' }), monospacedDigit()]}>{props.runs}</Text>
-        <Text modifiers={[font({ size: 12 }), foregroundStyle(muted)]}>{props.runsLabel}</Text>
-      </VStack>
+      <HStack spacing={8} modifiers={[padding({ leading: 8 })]}>
+        {logo(30)}
+        <VStack alignment="leading" spacing={0}>
+          <Text modifiers={[font({ size: 24, weight: 'bold' }), monospacedDigit()]}>{props.runs}</Text>
+          <Text modifiers={[font({ size: 12 }), foregroundStyle(muted)]}>{props.runsLabel}</Text>
+        </VStack>
+      </HStack>
     ),
     expandedTrailing: (
       <VStack alignment="trailing" spacing={2} modifiers={[padding({ trailing: 8 })]}>
         <Text modifiers={[font({ size: 15, weight: 'semibold' })]}>{props.state}</Text>
-        <Text date={started} dateStyle="timer" modifiers={[font({ size: 13 }), monospacedDigit(), foregroundStyle(muted)]} />
+        {timer(13, muted, 80)}
       </VStack>
     ),
     expandedBottom: (

@@ -71,6 +71,9 @@ jobs:
         run: |
           APP=$(ls -d ios/build/Build/Products/Release-iphoneos/*.app | head -1)
           test -f "$APP/main.jsbundle" || { echo "В приложении нет JS-бандла"; exit 1; }
+          # Вёрстка окна для экрана блокировки должна быть вшита в расширение
+          grep -q RideActivity "$APP/PlugIns/ExpoWidgetsTarget.appex/ExpoWidgets.bundle/ExpoWidgetsLayoutRegistry.json" \
+            || { echo "В расширении нет вёрстки окна для экрана блокировки"; exit 1; }
           # Номер сборки берётся из поля version в app.json: Snowwy-1.0.2.ipa
           VERSION=$(node -p "require('./app.json').expo.version")
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"

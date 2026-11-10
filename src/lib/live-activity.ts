@@ -1,10 +1,10 @@
 import { isRunningInExpoGo } from 'expo';
 import type { LiveActivity } from 'expo-widgets';
-import { Platform } from 'react-native';
+import { Image, Platform } from 'react-native';
 
 import type { RideActivityProps } from '@/widgets/ride-activity';
 
-import { distance, int, kmh, runsWord } from './format';
+import { clock, distance, int, kmh, runsWord } from './format';
 import type { Analysis, LiveState, TrackPoint } from './types';
 
 /** Как часто обновлять окно на экране блокировки, мс */
@@ -23,6 +23,23 @@ let factory: Factory | null | undefined;
 let instance: LiveActivity<RideActivityProps> | null = null;
 let shown = '';
 let updatedAt = 0;
+let iconUri: string | undefined;
+
+/**
+ * Адрес файла со знаком приложения внутри установленного приложения.
+ * Расширение, которое рисует островок, читает картинку прямо оттуда.
+ */
+function getIconUri(): string {
+  if (iconUri !== undefined) return iconUri;
+  try {
+    const uri = Image.resolveAssetSource(require('@/assets/images/island-icon.png'))?.uri ?? '';
+    // При разработке картинка отдаётся по сети — такой адрес расширению не подходит
+    iconUri = uri.startsWith('file://') ? uri : '';
+  } catch {
+    iconUri = '';
+  }
+  return iconUri;
+}
 
 /** Окно на экране блокировки есть только в отдельной сборке для iOS — в Expo Go модуля нет. */
 function getFactory(): Factory | null {
@@ -45,6 +62,8 @@ function toProps(startedAt: number, analysis: Analysis, last: TrackPoint | null,
   const d = distance(totals.distance);
   return {
     startedAt,
+    frozen: paused ? clock((Date.now() - startedAt) / 1000) : '',
+    icon: getIconUri(),
     state: paused ? 'На паузе' : last ? STATE_TITLE[state] : 'Ищем GPS…',
     runs: `${totals.runs}`,
     runsLabel: runsWord(totals.runs),

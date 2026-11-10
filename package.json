@@ -1,6 +1,6 @@
 {
   "name": "snowwy",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/ui": "~58.0.27",
@@ -53,7 +53,11 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "node --test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/patch-expo-widgets.mjs"
   },
-  "private": true
+  "private": true,
+  "expoWidgetsLiveActivities": [
+    "src/widgets/ride-activity.tsx"
+  ]
 }
