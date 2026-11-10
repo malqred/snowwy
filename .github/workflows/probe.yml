@@ -1,0 +1,21 @@
+name: probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-26, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - run: |
+          uname -a
+          if [ "$(uname)" = "Darwin" ]; then
+            sw_vers
+            ls /Applications | grep -i xcode
+            xcodebuild -version
+          fi
