@@ -71,16 +71,19 @@ jobs:
         run: |
           APP=$(ls -d ios/build/Build/Products/Release-iphoneos/*.app | head -1)
           test -f "$APP/main.jsbundle" || { echo "В приложении нет JS-бандла"; exit 1; }
+          # Номер сборки берётся из поля version в app.json: Snowwy-1.0.2.ipa
+          VERSION=$(node -p "require('./app.json').expo.version")
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir -p out/Payload
           cp -R "$APP" out/Payload/
           cd out
-          zip -qry Snowwy.ipa Payload
-          ls -lh Snowwy.ipa
+          zip -qry "Snowwy-$VERSION.ipa" Payload
+          ls -lh "Snowwy-$VERSION.ipa"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Snowwy-ipa
-          path: out/Snowwy.ipa
+          name: Snowwy-${{ env.VERSION }}
+          path: out/Snowwy-${{ env.VERSION }}.ipa
           retention-days: 30
 
       # Релиз нужен, чтобы .ipa скачивался одним файлом, без распаковки архива
@@ -88,8 +91,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="build-${{ github.run_number }}"
-          gh release create "$TAG" out/Snowwy.ipa \
-            --title "Snowwy, сборка ${{ github.run_number }}" \
-            --notes "Неподписанный .ipa для установки через Sideloadly. Инструкция — в README." \
-            --target "${{ github.sha }}"
+          TAG="v$VERSION"
+          FILE="out/Snowwy-$VERSION.ipa"
+          # Повторная сборка той же версии заменяет файл в уже существующем релизе
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$FILE" --clobber
+          else
+            gh release create "$TAG" "$FILE" \
+              --title "Snowwy $VERSION" \
+              --notes "Неподписанный .ipa для установки через iLoader или Sideloadly. Инструкция — в README." \
+              --target "${{ github.sha }}"
+          fi
