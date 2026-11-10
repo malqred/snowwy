@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CableCar, Flag, Gauge, Mountain, Pause, Play, Route, TrendingDown, Zap } from '@/components/icons';
 import { Logo } from '@/components/logo';
 import { RunList } from '@/components/run-list';
 import { TrackMap } from '@/components/track-map';
@@ -102,7 +103,7 @@ export default function RideScreen() {
           accessibilityLabel="Начать катание"
           style={({ pressed }) => [
             styles.startButton,
-            { backgroundColor: t.text },
+            { backgroundColor: t.accent },
             (pressed || busy) && { opacity: 0.7, transform: [{ scale: 0.97 }] },
           ]}>
           <Text style={[styles.startText, { color: t.inverse }]}>Старт</Text>
@@ -142,12 +143,12 @@ export default function RideScreen() {
 
       <StatGrid
         items={[
-          { label: 'Скорость', value: kmh(last && state !== 'pause' ? last.speed : 0), unit: 'км/ч' },
-          { label: 'Макс. скорость', value: kmh(totals.maxSpeed), unit: 'км/ч' },
-          { label: 'Дистанция', value: d.value, unit: d.unit },
-          { label: 'Перепад', value: int(totals.vertical), unit: 'м' },
-          { label: 'Высота', value: last ? int(last.alt) : '—', unit: 'м' },
-          { label: 'На подъёмниках', value: span(totals.liftTime) },
+          { icon: Gauge, label: 'Скорость', value: kmh(last && state !== 'pause' ? last.speed : 0), unit: 'км/ч' },
+          { icon: Zap, label: 'Макс. скорость', value: kmh(totals.maxSpeed), unit: 'км/ч' },
+          { icon: Route, label: 'Дистанция', value: d.value, unit: d.unit },
+          { icon: TrendingDown, label: 'Перепад', value: int(totals.vertical), unit: 'м' },
+          { icon: Mountain, label: 'Высота', value: last ? int(last.alt) : '—', unit: 'м' },
+          { icon: CableCar, label: 'На подъёмниках', value: span(totals.liftTime) },
         ]}
       />
 
@@ -155,11 +156,12 @@ export default function RideScreen() {
         <Button
           title={paused ? 'Продолжить' : 'Пауза'}
           kind={paused ? 'primary' : 'secondary'}
+          icon={paused ? Play : Pause}
           onPress={togglePause}
           disabled={busy}
           style={styles.action}
         />
-        <Button title="Завершить" kind="secondary" onPress={stop} disabled={busy} style={styles.action} />
+        <Button title="Завершить" kind="secondary" icon={Flag} onPress={stop} disabled={busy} style={styles.action} />
       </View>
 
       {paused ? (

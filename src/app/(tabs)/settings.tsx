@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Label, Title } from '@/components/ui';
+import { Bell, FlaskConical, MonitorSmartphone, Moon, Smartphone, Sun, Trash, type IconType } from '@/components/icons';
+import { Button, Card, ICON_STROKE, Label, Title } from '@/components/ui';
 import { analyze } from '@/lib/analyze';
 import { createSession, deleteEverything, finishSession, insertPoints } from '@/lib/db';
 import { generateDemoTrack } from '@/lib/demo';
@@ -11,10 +12,10 @@ import { updateSettings, useSettings, type ThemeMode } from '@/lib/settings';
 import { useTracker } from '@/lib/tracker';
 import { space, useTheme } from '@/theme';
 
-const THEMES: { mode: ThemeMode; title: string }[] = [
-  { mode: 'system', title: 'Как в системе' },
-  { mode: 'light', title: 'Светлая' },
-  { mode: 'dark', title: 'Тёмная' },
+const THEMES: { mode: ThemeMode; title: string; icon: IconType }[] = [
+  { mode: 'system', title: 'Системная', icon: MonitorSmartphone },
+  { mode: 'light', title: 'Светлая', icon: Sun },
+  { mode: 'dark', title: 'Тёмная', icon: Moon },
 ];
 
 export default function SettingsScreen() {
@@ -60,7 +61,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Label>Тема</Label>
         <View style={[styles.segments, { backgroundColor: t.card, borderColor: t.line }]}>
-          {THEMES.map(({ mode, title }) => {
+          {THEMES.map(({ mode, title, icon: Icon }) => {
             const active = settings.theme === mode;
             return (
               <Pressable
@@ -68,7 +69,8 @@ export default function SettingsScreen() {
                 onPress={() => updateSettings({ theme: mode })}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
-                style={[styles.segment, active && { backgroundColor: t.text }]}>
+                style={[styles.segment, active && { backgroundColor: t.accent }]}>
+                <Icon size={16} color={active ? t.inverse : t.text} strokeWidth={ICON_STROKE} />
                 <Text style={[styles.segmentText, { color: active ? t.inverse : t.text }]}>{title}</Text>
               </Pressable>
             );
@@ -80,7 +82,10 @@ export default function SettingsScreen() {
         <Label>Запись</Label>
         <Card style={styles.switchRow}>
           <View style={styles.switchBody}>
-            <Text style={[styles.rowTitle, { color: t.text }]}>Не гасить экран</Text>
+            <View style={styles.rowHead}>
+              <Smartphone size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              <Text style={[styles.rowTitle, { color: t.text }]}>Не гасить экран</Text>
+            </View>
             <Text style={[styles.rowSub, { color: t.sub }]}>
               Экран остаётся включённым, пока идёт запись. Применится со следующего катания.
             </Text>
@@ -88,13 +93,16 @@ export default function SettingsScreen() {
           <Switch
             value={settings.keepAwake}
             onValueChange={(keepAwake) => updateSettings({ keepAwake })}
-            trackColor={{ true: t.text, false: t.line }}
+            trackColor={{ true: t.accent, false: t.line }}
             thumbColor={t.dark && settings.keepAwake ? t.inverse : undefined}
           />
         </Card>
         <Card style={styles.switchRow}>
           <View style={styles.switchBody}>
-            <Text style={[styles.rowTitle, { color: t.text }]}>Напоминать о записи</Text>
+            <View style={styles.rowHead}>
+              <Bell size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              <Text style={[styles.rowTitle, { color: t.text }]}>Напоминать о записи</Text>
+            </View>
             <Text style={[styles.rowSub, { color: t.sub }]}>
               Через полчаса без движения придёт уведомление, через два часа запись завершится сама. О паузе
               напомним через час.
@@ -103,7 +111,7 @@ export default function SettingsScreen() {
           <Switch
             value={settings.remind}
             onValueChange={(remind) => updateSettings({ remind })}
-            trackColor={{ true: t.text, false: t.line }}
+            trackColor={{ true: t.accent, false: t.line }}
             thumbColor={t.dark && settings.remind ? t.inverse : undefined}
           />
         </Card>
@@ -111,8 +119,8 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Label>Данные</Label>
-        <Button title="Добавить демо-катание" kind="secondary" onPress={addDemo} disabled={busy} />
-        <Button title="Удалить все записи" kind="danger" onPress={wipe} disabled={recording} />
+        <Button title="Добавить демо-катание" kind="secondary" icon={FlaskConical} onPress={addDemo} disabled={busy} />
+        <Button title="Удалить все записи" kind="danger" icon={Trash} onPress={wipe} disabled={recording} />
         <Text style={[styles.rowSub, { color: t.sub }]}>
           Демо-катание — выдуманный день на семь спусков, чтобы посмотреть приложение без выезда на склон. Все данные
           хранятся только на этом телефоне.
@@ -135,8 +143,9 @@ const styles = StyleSheet.create({
     padding: 4,
     gap: 4,
   },
-  segment: { flex: 1, height: 40, borderRadius: 12, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
-  segmentText: { fontSize: 14, fontWeight: '600' },
+  rowHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  segment: { flex: 1, flexDirection: 'row', gap: 6, height: 40, borderRadius: 12, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
+  segmentText: { fontSize: 13, fontWeight: '600' },
   switchRow: { flexDirection: 'row', alignItems: 'center', padding: space.m, gap: space.m },
   switchBody: { flex: 1, gap: 4 },
   rowTitle: { fontSize: 17, fontWeight: '600' },

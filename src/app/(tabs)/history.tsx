@@ -3,7 +3,8 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Label, StatGrid, Title } from '@/components/ui';
+import { CalendarDays, Flag, Route, Timer, TrendingDown, Trophy, Zap } from '@/components/icons';
+import { Card, Chevron, Label, StatGrid, Title } from '@/components/ui';
 import { listSessions } from '@/lib/db';
 import { findRecords } from '@/lib/records';
 import { date, dateIso, int, km, kmh, runsWord, seasonOf, seasonTitle, span } from '@/lib/format';
@@ -39,12 +40,12 @@ function seasonStats(sessions: Session[]) {
     if (s.totals.maxSpeed > maxSpeed) maxSpeed = s.totals.maxSpeed;
   }
   return [
-    { label: 'Дней', value: `${days}` },
-    { label: 'Спусков', value: int(runs) },
-    { label: 'Дистанция', value: km(dist), unit: 'км' },
-    { label: 'Перепад', value: int(vertical), unit: 'м' },
-    { label: 'Рекорд', value: kmh(maxSpeed), unit: 'км/ч' },
-    { label: 'На спусках', value: span(runTime) },
+    { icon: CalendarDays, label: 'Дней', value: `${days}` },
+    { icon: Flag, label: 'Спусков', value: int(runs) },
+    { icon: Route, label: 'Дистанция', value: km(dist), unit: 'км' },
+    { icon: TrendingDown, label: 'Перепад', value: int(vertical), unit: 'м' },
+    { icon: Zap, label: 'Рекорд', value: kmh(maxSpeed), unit: 'км/ч' },
+    { icon: Timer, label: 'На спусках', value: span(runTime) },
   ];
 }
 
@@ -87,7 +88,7 @@ export default function HistoryScreen() {
 
       {records.length > 0 ? (
         <View style={styles.list}>
-          <Label>Личные рекорды</Label>
+          <Label icon={Trophy}>Личные рекорды</Label>
           <Card>
             {records.map((r, i) => (
               <Pressable
@@ -107,7 +108,7 @@ export default function HistoryScreen() {
                   {r.value}
                   {r.unit ? <Text style={[styles.rowSub, { color: t.sub }]}> {r.unit}</Text> : null}
                 </Text>
-                <Text style={[styles.chevron, { color: t.sub }]}>›</Text>
+                <Chevron />
               </Pressable>
             ))}
           </Card>
@@ -120,7 +121,7 @@ export default function HistoryScreen() {
           <StatGrid columns={3} items={seasonStats(season.sessions)} />
 
           <View style={styles.list}>
-            <Label>Дни катания</Label>
+            <Label icon={CalendarDays}>Дни катания</Label>
             <Card>
               {season.sessions.map((s, i) => (
                 <Pressable
@@ -143,7 +144,7 @@ export default function HistoryScreen() {
                   <Text style={[styles.rowSub, { color: t.sub }]}>
                     {span(((s.endedAt ?? s.startedAt) - s.startedAt) / 1000)}
                   </Text>
-                  <Text style={[styles.chevron, { color: t.sub }]}>›</Text>
+                  <Chevron />
                 </Pressable>
               ))}
             </Card>
@@ -173,6 +174,5 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1, gap: 3 },
   rowTitle: { fontSize: 17, fontWeight: '600' },
   rowSub: { fontSize: 13, fontVariant: ['tabular-nums'] },
-  chevron: { fontSize: 22 },
   recordValue: { fontSize: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

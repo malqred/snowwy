@@ -3,10 +3,22 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } fro
 
 import { space, useTheme } from '@/theme';
 
-/** Мелкая подпись заглавными буквами. */
-export function Label({ children }: { children: ReactNode }) {
+import { ChevronRight, type IconType } from './icons';
+
+/** Толщина линии всех иконок интерфейса */
+export const ICON_STROKE = 1.75;
+
+/** Мелкая подпись заглавными буквами, при желании с иконкой слева. */
+export function Label({ children, icon: Icon }: { children: ReactNode; icon?: IconType }) {
   const t = useTheme();
-  return <Text style={[styles.label, { color: t.sub }]}>{children}</Text>;
+  return (
+    <View style={styles.labelRow}>
+      {Icon ? <Icon size={14} color={t.sub} strokeWidth={ICON_STROKE} /> : null}
+      <Text style={[styles.label, { color: t.sub }]} numberOfLines={1}>
+        {children}
+      </Text>
+    </View>
+  );
 }
 
 /** Заголовок экрана. */
@@ -20,7 +32,13 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   return <View style={[styles.card, { backgroundColor: t.card, borderColor: t.line }, style]}>{children}</View>;
 }
 
-export type StatItem = { label: string; value: string; unit?: string };
+/** Стрелка «дальше» в строках списков. */
+export function Chevron() {
+  const t = useTheme();
+  return <ChevronRight size={18} color={t.sub} strokeWidth={ICON_STROKE} />;
+}
+
+export type StatItem = { label: string; value: string; unit?: string; icon?: IconType };
 
 /** Сетка показателей в две или три колонки. */
 export function StatGrid({ items, columns = 2 }: { items: StatItem[]; columns?: 2 | 3 }) {
@@ -28,7 +46,7 @@ export function StatGrid({ items, columns = 2 }: { items: StatItem[]; columns?: 
   const rows: StatItem[][] = [];
   for (let i = 0; i < items.length; i += columns) rows.push(items.slice(i, i + columns));
   return (
-    <Card style={styles.grid}>
+    <Card>
       {rows.map((row, r) => (
         <View
           key={r}
@@ -40,7 +58,7 @@ export function StatGrid({ items, columns = 2 }: { items: StatItem[]; columns?: 
                 styles.cell,
                 c > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: t.line },
               ]}>
-              <Label>{item.label}</Label>
+              <Label icon={item.icon}>{item.label}</Label>
               <Text style={[styles.value, columns === 3 && styles.valueSmall, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit>
                 {item.value}
                 {item.unit ? <Text style={[styles.unit, { color: t.sub }]}> {item.unit}</Text> : null}
@@ -59,11 +77,12 @@ type ButtonProps = {
   title: string;
   onPress: () => void;
   kind?: 'primary' | 'secondary' | 'danger';
+  icon?: IconType;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
-export function Button({ title, onPress, kind = 'primary', disabled, style }: ButtonProps) {
+export function Button({ title, onPress, kind = 'primary', icon: Icon, disabled, style }: ButtonProps) {
   const t = useTheme();
   const filled = kind === 'primary';
   const color = kind === 'danger' ? t.danger : filled ? t.inverse : t.text;
@@ -74,21 +93,24 @@ export function Button({ title, onPress, kind = 'primary', disabled, style }: Bu
       accessibilityRole="button"
       style={({ pressed }) => [
         styles.button,
-        filled ? { backgroundColor: t.text } : { borderWidth: 1, borderColor: kind === 'danger' ? t.danger : t.line },
+        filled ? { backgroundColor: t.accent } : { borderWidth: 1, borderColor: kind === 'danger' ? t.danger : t.line },
         (pressed || disabled) && { opacity: 0.6 },
         style,
       ]}>
+      {Icon ? <Icon size={18} color={color} strokeWidth={ICON_STROKE} /> : null}
       <Text style={[styles.buttonText, { color }]}>{title}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   label: {
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
+    flexShrink: 1,
   },
   title: {
     fontSize: 34,
@@ -101,7 +123,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
-  grid: {},
   gridRow: { flexDirection: 'row' },
   cell: { flex: 1, paddingHorizontal: space.m, paddingVertical: 14, gap: 6 },
   value: {
@@ -115,6 +136,8 @@ const styles = StyleSheet.create({
   button: {
     height: 54,
     borderRadius: 27,
+    flexDirection: 'row',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: space.l,

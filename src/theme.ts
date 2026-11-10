@@ -1,29 +1,51 @@
 import { useColorScheme } from 'react-native';
 
-const light = {
+/** Палитра приложения: пять оттенков от тёмно-синего до ледяного. */
+export const palette = {
+  ink: '#0A1523',
+  deep: '#1F3952',
+  mid: '#4D728F',
+  sky: '#8FB1C9',
+  ice: '#CADCEA',
+} as const;
+
+export type Theme = {
+  dark: boolean;
+  bg: string;
+  card: string;
+  text: string;
+  sub: string;
+  line: string;
+  /** Заливка главных кнопок и выбранных элементов */
+  accent: string;
+  /** Цвет текста и иконок на заливке accent */
+  inverse: string;
+  danger: string;
+};
+
+const light: Theme = {
   dark: false,
-  bg: '#F2EFEA',
-  card: '#FBFAF7',
-  text: '#1B1B1B',
-  sub: '#7B766E',
-  line: '#DEDAD2',
-  /** Цвет текста на залитых кнопках */
-  inverse: '#F2EFEA',
+  bg: '#DCE8F1',
+  card: '#EEF4F8',
+  text: palette.ink,
+  sub: palette.mid,
+  line: '#BCD0DF',
+  accent: palette.deep,
+  inverse: '#EEF4F8',
   danger: '#B8392C',
 };
 
-const dark: typeof light = {
+const dark: Theme = {
   dark: true,
-  bg: '#0D0D0D',
-  card: '#191918',
-  text: '#F2EFEA',
-  sub: '#8F8A82',
-  line: '#2B2A28',
-  inverse: '#0D0D0D',
+  bg: palette.ink,
+  card: '#12233A',
+  text: palette.ice,
+  sub: palette.sky,
+  line: palette.deep,
+  accent: palette.sky,
+  inverse: palette.ink,
   danger: '#E8695C',
 };
-
-export type Theme = typeof light;
 
 export function useTheme(): Theme {
   return useColorScheme() === 'dark' ? dark : light;

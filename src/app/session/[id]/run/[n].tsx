@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ArrowDownToLine, ArrowUpToLine, Clock, Gauge, Pause, Play, Route, TrendingDown, TriangleRight, Turtle, Zap } from '@/components/icons';
 import { Chart } from '@/components/chart';
 import { TrackMap } from '@/components/track-map';
 import { StatGrid } from '@/components/ui';
@@ -68,8 +69,12 @@ function RunDetails({ data, run }: { data: SessionData; run: Segment }) {
             accessibilityRole="button"
             accessibilityLabel={replay.playing ? 'Остановить повтор' : 'Запустить повтор спуска'}
             hitSlop={8}
-            style={({ pressed }) => [styles.play, { backgroundColor: t.text }, pressed && { opacity: 0.7 }]}>
-            <Text style={[styles.playIcon, { color: t.inverse }]}>{replay.playing ? '❚❚' : '▶'}</Text>
+            style={({ pressed }) => [styles.play, { backgroundColor: t.accent }, pressed && { opacity: 0.7 }]}>
+            {replay.playing ? (
+              <Pause size={20} color={t.inverse} strokeWidth={2} />
+            ) : (
+              <Play size={20} color={t.inverse} strokeWidth={2} />
+            )}
           </Pressable>
           <View style={styles.replayBody}>
             <View style={styles.replayHead}>
@@ -81,7 +86,7 @@ function RunDetails({ data, run }: { data: SessionData; run: Segment }) {
               </Text>
             </View>
             <View style={[styles.bar, { backgroundColor: t.line }]}>
-              <View style={[styles.barFill, { backgroundColor: t.text, width: `${replay.progress * 100}%` }]} />
+              <View style={[styles.barFill, { backgroundColor: t.accent, width: `${replay.progress * 100}%` }]} />
             </View>
           </View>
         </View>
@@ -99,16 +104,16 @@ function RunDetails({ data, run }: { data: SessionData; run: Segment }) {
 
       <StatGrid
         items={[
-          { label: 'Средняя скорость', value: kmh(run.avgSpeed, 1), unit: 'км/ч' },
-          { label: 'Макс. скорость', value: kmh(run.maxSpeed, 1), unit: 'км/ч' },
-          { label: 'Мин. скорость', value: kmh(run.minSpeed, 1), unit: 'км/ч' },
-          { label: 'Расстояние', value: d.value, unit: d.unit },
-          { label: 'Перепад', value: int(run.vertical), unit: 'м' },
-          { label: 'Время', value: clock(run.duration) },
-          { label: 'Средний уклон', value: `${num(run.avgSlope)}°` },
-          { label: 'Макс. уклон', value: `${num(run.maxSlope)}°` },
-          { label: 'Старт', value: int(run.startAlt), unit: 'м' },
-          { label: 'Финиш', value: int(run.endAlt), unit: 'м' },
+          { icon: Gauge, label: 'Средняя скорость', value: kmh(run.avgSpeed, 1), unit: 'км/ч' },
+          { icon: Zap, label: 'Макс. скорость', value: kmh(run.maxSpeed, 1), unit: 'км/ч' },
+          { icon: Turtle, label: 'Мин. скорость', value: kmh(run.minSpeed, 1), unit: 'км/ч' },
+          { icon: Route, label: 'Расстояние', value: d.value, unit: d.unit },
+          { icon: TrendingDown, label: 'Перепад', value: int(run.vertical), unit: 'м' },
+          { icon: Clock, label: 'Время', value: clock(run.duration) },
+          { icon: TriangleRight, label: 'Средний уклон', value: `${num(run.avgSlope)}°` },
+          { icon: TriangleRight, label: 'Макс. уклон', value: `${num(run.maxSlope)}°` },
+          { icon: ArrowUpToLine, label: 'Старт', value: int(run.startAlt), unit: 'м' },
+          { icon: ArrowDownToLine, label: 'Финиш', value: int(run.endAlt), unit: 'м' },
         ]}
       />
 
@@ -141,7 +146,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   play: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  playIcon: { fontSize: 15, fontWeight: '700' },
   replayBody: { flex: 1, gap: 8 },
   replayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   replayValue: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },

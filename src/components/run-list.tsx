@@ -4,7 +4,7 @@ import { clock, distance, kmh, num, time } from '@/lib/format';
 import type { Segment } from '@/lib/types';
 import { space, useTheme } from '@/theme';
 
-import { Card } from './ui';
+import { Card, Chevron } from './ui';
 
 type Props = {
   runs: Segment[];
@@ -48,7 +48,7 @@ export function RunList({ runs, onPress, badges }: Props) {
               <Text style={[styles.speed, { color: t.text }]}>{kmh(run.maxSpeed)}</Text>
               <Text style={[styles.sub, { color: t.sub }]}>км/ч макс.</Text>
             </View>
-            {onPress ? <Text style={[styles.chevron, { color: t.sub }]}>›</Text> : null}
+            {onPress ? <Chevron /> : null}
           </Pressable>
         );
       })}
@@ -80,5 +80,4 @@ const styles = StyleSheet.create({
   badgeNote: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   right: { alignItems: 'flex-end', gap: 2 },
   speed: { fontSize: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  chevron: { fontSize: 22, marginLeft: -4 },
 });

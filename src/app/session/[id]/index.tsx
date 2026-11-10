@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
+import { ArrowDownToLine, ArrowUpToLine, CableCar, Download, Gauge, Route, Share, Timer, Trash, TrendingDown, Zap } from '@/components/icons';
 import { RunList } from '@/components/run-list';
 import { ShareCard } from '@/components/share-card';
 import { TrackMap } from '@/components/track-map';
@@ -120,14 +121,14 @@ export default function SessionScreen() {
 
       <StatGrid
         items={[
-          { label: 'Дистанция', value: d.value, unit: d.unit },
-          { label: 'Перепад', value: int(totals.vertical), unit: 'м' },
-          { label: 'Макс. скорость', value: kmh(totals.maxSpeed, 1), unit: 'км/ч' },
-          { label: 'Ср. скорость', value: kmh(totals.avgSpeed, 1), unit: 'км/ч' },
-          { label: 'На спусках', value: span(totals.runTime) },
-          { label: 'На подъёмниках', value: span(totals.liftTime) },
-          { label: 'Верхняя точка', value: int(totals.maxAlt), unit: 'м' },
-          { label: 'Нижняя точка', value: int(totals.minAlt), unit: 'м' },
+          { icon: Route, label: 'Дистанция', value: d.value, unit: d.unit },
+          { icon: TrendingDown, label: 'Перепад', value: int(totals.vertical), unit: 'м' },
+          { icon: Zap, label: 'Макс. скорость', value: kmh(totals.maxSpeed, 1), unit: 'км/ч' },
+          { icon: Gauge, label: 'Ср. скорость', value: kmh(totals.avgSpeed, 1), unit: 'км/ч' },
+          { icon: Timer, label: 'На спусках', value: span(totals.runTime) },
+          { icon: CableCar, label: 'На подъёмниках', value: span(totals.liftTime) },
+          { icon: ArrowUpToLine, label: 'Верхняя точка', value: int(totals.maxAlt), unit: 'м' },
+          { icon: ArrowDownToLine, label: 'Нижняя точка', value: int(totals.minAlt), unit: 'м' },
         ]}
       />
 
@@ -143,9 +144,9 @@ export default function SessionScreen() {
       )}
 
       <View style={styles.actions}>
-        <Button title="Поделиться итогами" onPress={() => setSharing(true)} />
-        <Button title="Экспорт в GPX" kind="secondary" onPress={exportGpx} />
-        <Button title="Удалить запись" kind="danger" onPress={remove} />
+        <Button title="Поделиться итогами" icon={Share} onPress={() => setSharing(true)} />
+        <Button title="Экспорт в GPX" kind="secondary" icon={Download} onPress={exportGpx} />
+        <Button title="Удалить запись" kind="danger" icon={Trash} onPress={remove} />
       </View>
 
       <Modal visible={sharing} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSharing(false)}>
@@ -154,7 +155,7 @@ export default function SessionScreen() {
             <ShareCard ref={card} startedAt={session.startedAt} totals={totals} points={points} segments={segments} />
           </View>
           <View style={styles.sheetActions}>
-            <Button title="Поделиться" onPress={shareImage} />
+            <Button title="Поделиться" icon={Share} onPress={shareImage} />
             <Button title="Закрыть" kind="secondary" onPress={() => setSharing(false)} />
           </View>
         </View>
