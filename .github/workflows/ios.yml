@@ -1,7 +1,8 @@
 name: iOS (.ipa)
 
 # Собирает неподписанный Snowwy.ipa для установки через Sideloadly.
-# Запуск: вкладка Actions → «iOS (.ipa)» → Run workflow, либо автоматически при каждом push в main.
+# Запуск: вкладка Actions → «iOS (.ipa)» → Run workflow. Только вручную: в приватном
+# репозитории минута macOS стоит как десять обычных, а бесплатных минут 2000 в месяц.
 
 on:
   workflow_dispatch:
@@ -10,11 +11,6 @@ on:
       runner:
         description: Образ macOS для сборки
         default: macos-26-intel
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'tests/**'
 
 permissions:
   contents: write
