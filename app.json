@@ -2,7 +2,7 @@
   "expo": {
     "name": "Snowwy",
     "slug": "snowwy",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "snowwy",
@@ -67,6 +67,15 @@
         "expo-sensors",
         {
           "motionPermission": "Snowwy использует барометр телефона, чтобы точнее считать перепад высот на спусках."
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Snowwy использует камеру, чтобы сканировать QR-код с приглашением в группу друзей.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ]
     ],

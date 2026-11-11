@@ -38,6 +38,16 @@ import Scale from 'lucide-react-native/icons/scale';
 import CloudSnow from 'lucide-react-native/icons/cloud-snow';
 import Layers from 'lucide-react-native/icons/layers';
 import Coffee from 'lucide-react-native/icons/coffee';
+import Users from 'lucide-react-native/icons/users';
+import QrCode from 'lucide-react-native/icons/qr-code';
+import ScanLine from 'lucide-react-native/icons/scan-line';
+import UserMinus from 'lucide-react-native/icons/user-minus';
+import UserPlus from 'lucide-react-native/icons/user-plus';
+import Cloud from 'lucide-react-native/icons/cloud';
+import LogOut from 'lucide-react-native/icons/log-out';
+import Pencil from 'lucide-react-native/icons/pencil';
+import MapPin from 'lucide-react-native/icons/map-pin';
+import KeyRound from 'lucide-react-native/icons/key-round';
 
 export type { LucideIcon as IconType } from 'lucide-react-native';
 
@@ -80,4 +90,14 @@ export {
   CloudSnow,
   Layers,
   Coffee,
+  Users,
+  QrCode,
+  ScanLine,
+  UserMinus,
+  UserPlus,
+  Cloud,
+  LogOut,
+  Pencil,
+  MapPin,
+  KeyRound,
 };

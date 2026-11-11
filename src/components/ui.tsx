@@ -62,7 +62,12 @@ export function Screen({ children, style, ...rest }: ScrollViewProps) {
   return (
     <View style={styles.screen}>
       <Backdrop />
-      <ScrollView style={[styles.screen, style]} showsVerticalScrollIndicator={false} {...rest}>
+      {/* Когда открыта клавиатура, прокрутка сама поднимает поле ввода над ней */}
+      <ScrollView
+        style={[styles.screen, style]}
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+        {...rest}>
         {children}
       </ScrollView>
     </View>

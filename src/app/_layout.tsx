@@ -54,6 +54,9 @@ export default function RootLayout() {
         <Stack.Screen name="session/[id]/run/[n]" options={{ title: '' }} />
         <Stack.Screen name="session/[id]/compare" options={{ title: 'Сравнение' }} />
         <Stack.Screen name="session/[id]/done" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="friends/account" options={{ title: 'Аккаунт Cloudflare' }} />
+        <Stack.Screen name="friends/join" options={{ title: 'Вход в группу' }} />
+        <Stack.Screen name="friends/invite" options={{ title: 'Приглашение' }} />
       </Stack>
     </ThemeProvider>
   );

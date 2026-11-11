@@ -148,3 +148,90 @@ test('пауза в записи не добавляет расстояние', 
   assert.ok(runs[0].movingTime < 130, `время в движении ${runs[0].movingTime}`);
   assert.ok(totals.longestRun === runs[0].distance);
 });
+
+/** Трек из участков: [скорость м/с, набор высоты м/с (минус — вниз), секунды]. */
+function route(parts) {
+  const points = [];
+  let t = START;
+  let alt = 1500;
+  let lat = 43.6;
+  for (const [speed, climb, seconds] of parts) {
+    for (let i = 0; i < seconds; i++) {
+      alt += climb;
+      lat += speed / 111320;
+      points.push({ t, lat, lon: 40.3, alt, speed, acc: 5 });
+      t += 1000;
+    }
+  }
+  return points;
+}
+
+const tally = (points) => {
+  const { segments } = analyze(points);
+  return {
+    runs: segments.filter((s) => s.kind === 'run'),
+    lifts: segments.filter((s) => s.kind === 'lift'),
+  };
+};
+
+test('маленький склон: спуски с перепадом 10 метров считаются', () => {
+  const lap = [
+    [0.8, 0.1, 100], // ковёр-подъёмник: 10 м вверх
+    [0, 0, 20],
+    [5, -0.5, 20], // спуск: 10 м вниз, 100 м пути
+    [0, 0, 30],
+  ];
+  const { runs } = tally(route([[0, 0, 10], ...lap, ...lap, ...lap]));
+  assert.equal(runs.length, 3);
+  for (const r of runs) assert.ok(r.vertical > 7 && r.vertical < 12, `перепад ${r.vertical}`);
+});
+
+test('спуск с перепадом 6 метров считается, с перепадом 3 метра — нет', () => {
+  assert.equal(tally(route([[0, 0, 20], [6, -0.3, 20], [0, 0, 20]])).runs.length, 1);
+  assert.equal(tally(route([[0, 0, 20], [6, -0.15, 20], [0, 0, 20]])).runs.length, 0);
+});
+
+test('контруклон посреди спуска не делит его на два', () => {
+  const points = route([
+    [0, 0, 20],
+    [12, -2.5, 40], // 100 м вниз
+    [10, 1.3, 6], // по инерции 8 м вверх
+    [12, -2.5, 40], // ещё 100 м вниз
+    [0, 0, 20],
+  ]);
+  const { runs, lifts } = tally(points);
+  assert.equal(runs.length, 1);
+  assert.equal(lifts.length, 0);
+  assert.ok(Math.abs(runs[0].vertical - 192) < 12, `перепад ${runs[0].vertical}`);
+});
+
+test('пока едешь через контруклон, спуск не считается законченным', () => {
+  const live = analyze(route([[0, 0, 20], [12, -2.5, 40], [10, 1.3, 6]]));
+  const runs = live.segments.filter((s) => s.kind === 'run');
+  assert.equal(runs.length, 1);
+  assert.ok(runs[0].open);
+});
+
+test('провал на линии подъёмника не превращается в спуск', () => {
+  const points = route([
+    [0, 0, 20],
+    [5, 1.5, 100], // 150 м вверх
+    [5, -0.2, 40], // линия проседает на 8 м, скорость та же
+    [5, 1.5, 100], // ещё 150 м вверх
+    [0, 0, 30],
+  ]);
+  const { runs, lifts } = tally(points);
+  assert.equal(runs.length, 0);
+  assert.equal(lifts.length, 1);
+  assert.ok(lifts[0].vertical > 280, `подъём ${lifts[0].vertical}`);
+});
+
+test('пешком под горку — не спуск', () => {
+  const { runs } = tally(route([[0, 0, 20], [1.8, -0.08, 100], [0, 0, 20]]));
+  assert.equal(runs.length, 0);
+});
+
+test('короткий спуск: 20 метров пути и 6 метров перепада считается, 10 метров пути — нет', () => {
+  assert.equal(tally(route([[0, 0, 20], [4, -1.2, 5], [0, 0, 20]])).runs.length, 1);
+  assert.equal(tally(route([[0, 0, 20], [3, -2, 3], [0, 0, 20]])).runs.length, 0);
+});

@@ -8,6 +8,7 @@ import { useSyncExternalStore } from 'react';
 import { analyze, EMPTY_ANALYSIS, haversine } from './analyze';
 import { autoBackup } from './backup';
 import * as db from './db';
+import { sharePause, shareStop, shareTick } from './friends/store';
 import { bindRideActions, endRideActivity, startRideActivity, updateRideActivity } from './live-activity';
 import { cancelNotify, ensureNotifyPermission, notifyLater, notifyNow } from './notify';
 import { getSettings } from './settings';
@@ -237,6 +238,7 @@ function ingest(locations: Location.LocationObject[]) {
   }
   refreshActivity();
   loadWeather(last);
+  shareTick(last);
   checkIdle(last);
 }
 
@@ -464,6 +466,7 @@ export async function pauseRecording(): Promise<void> {
   if (!state.recording || state.paused) return;
   set({ paused: true, pausedAt: Date.now(), speed: 0 });
   refreshActivity(true);
+  sharePause(state.last);
   await idleLocation();
   stopBarometer();
   deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {});
@@ -512,6 +515,7 @@ export async function stopRecording(endedAt?: number): Promise<number | null> {
   // Сначала снимаем флаг записи, чтобы опоздавшие точки не попали в трек
   const track = points;
   set({ recording: false, paused: false });
+  shareStop();
 
   await stopLocation();
   stopBarometer();

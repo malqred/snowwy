@@ -28,6 +28,8 @@ export type Settings = {
   economy: boolean;
   /** Показывать на картах горнолыжные трассы и подъёмники */
   pistes: boolean;
+  /** Показывать меня группе друзей во время катания */
+  friends: boolean;
 };
 
 const KEY = 'settings';
@@ -42,6 +44,7 @@ const DEFAULTS: Settings = {
   voice: false,
   economy: false,
   pistes: false,
+  friends: false,
 };
 
 function load(): Settings {

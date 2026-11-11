@@ -13,8 +13,22 @@ const PISTES_URL = 'https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png';
 const PISTES_CACHE = `${Paths.cache.uri.replace(/\/+$/, '')}/pistes`;
 const PISTES_MAX_AGE = 7 * 24 * 3600;
 
+/** Человек на карте: кружок с первой буквой имени. */
+export type MapPin = {
+  id: string;
+  coord: Coord;
+  color: string;
+  letter: string;
+  /** Место давно не обновлялось */
+  dim?: boolean;
+};
+
 type Props = {
   lines: MapLine[];
+  /** Люди на карте (вкладка «Друзья») */
+  pins?: MapPin[];
+  /** Показать это место крупно; n меняется при каждом нажатии */
+  focus?: { coord: Coord; n: number } | null;
   /** Следить за текущим положением (во время записи) вместо показа всего трека */
   live?: boolean;
   /** Точка на треке — положение при повторе спуска */
@@ -22,9 +36,11 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
-const PADDING = { top: 36, right: 36, bottom: 36, left: 36 };
+const PADDING = { top: 48, right: 36, bottom: 36, left: 36 };
+/** Масштаб, когда на карте одна точка: примерно километр по высоте */
+const CLOSE = { latitudeDelta: 0.012, longitudeDelta: 0.012 };
 
-export function TrackMap({ lines, live = false, marker, style }: Props) {
+export function TrackMap({ lines, pins, focus, live = false, marker, style }: Props) {
   const t = useTheme();
   const map = useRef<MapView>(null);
   const [satellite, setSatellite] = useState(false);
@@ -34,13 +50,19 @@ export function TrackMap({ lines, live = false, marker, style }: Props) {
   // Показываем весь трек, когда карта готова или сменился набор линий
   const signature = live
     ? 'live'
-    : `${lines.length}:${lines[0]?.id}:${lines[0]?.coords.length ?? 0}:${lines[lines.length - 1]?.id}`;
+    : `${lines.length}:${lines[0]?.id}:${lines[0]?.coords.length ?? 0}:${lines[lines.length - 1]?.id}:${(pins ?? []).map((p) => p.id).join()}`;
   useEffect(() => {
     if (!ready || live) return;
-    const all = lines.flatMap((l) => l.coords);
+    const all = lines.flatMap((l) => l.coords).concat((pins ?? []).map((p) => p.coord));
     if (all.length > 1) map.current?.fitToCoordinates(all, { edgePadding: PADDING, animated: false });
+    else if (all.length === 1) map.current?.animateToRegion({ ...all[0], ...CLOSE }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, signature]);
+
+  useEffect(() => {
+    if (ready && focus) map.current?.animateToRegion({ ...focus.coord, ...CLOSE }, 300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, focus?.n]);
 
   return (
     <View style={[styles.wrap, { borderColor: t.line }, style]}>
@@ -69,6 +91,18 @@ export function TrackMap({ lines, live = false, marker, style }: Props) {
             lineCap="round"
             lineJoin="round"
           />
+        ))}
+        {(pins ?? []).map((p) => (
+          <Marker
+            // Вид метки рисуется один раз, поэтому при смене буквы или цвета она создаётся заново
+            key={`${p.id}:${p.letter}:${p.color}:${p.dim ? 1 : 0}`}
+            coordinate={p.coord}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}>
+            <View style={[styles.pin, { backgroundColor: p.color, opacity: p.dim ? 0.55 : 1 }]}>
+              <Text style={styles.pinText}>{p.letter}</Text>
+            </View>
+          </Marker>
         ))}
         {marker ? (
           <Marker coordinate={marker} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
@@ -122,4 +156,14 @@ const styles = StyleSheet.create({
   },
   toggleText: { fontSize: 13, fontWeight: '600' },
   marker: { width: 18, height: 18, borderRadius: 9, borderWidth: 3 },
+  pin: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });

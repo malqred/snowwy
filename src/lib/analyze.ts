@@ -1,11 +1,23 @@
 import type { Analysis, LiveState, Segment, SegmentKind, Totals, TrackPoint } from './types';
 
 /** Смена направления по высоте, после которой фиксируется новый участок, м */
-const REVERSAL = 15;
+const REVERSAL = 5;
+/**
+ * Смена направления меньше этой может оказаться не новым участком, а неровностью:
+ * контруклоном посреди спуска или провалом на линии подъёмника (см. isBump), м
+ */
+const BUMP = 15;
+/** Дольше этого по инерции в горку не едут: такой подъём уже не контруклон, с */
+const BUMP_CLIMB = 20;
+/** Подъёмник идёт с ровной скоростью: разброс не больше этого, м/с */
+const STEADY_SPREAD = 1.5;
 /** Минимальные параметры спуска и подъёма */
-const MIN_VERTICAL = 25;
-const MIN_RUN_DISTANCE = 80;
-const MIN_RUN_DURATION = 15;
+const MIN_RUN_VERTICAL = 5;
+const MIN_LIFT_VERTICAL = 25;
+const MIN_RUN_DISTANCE = 15;
+const MIN_RUN_DURATION = 4;
+/** Спуск, на котором ни разу не ехали быстрее, — это прогулка пешком, м/с */
+const MIN_RUN_TOP_SPEED = 2.5;
 const MIN_LIFT_DURATION = 30;
 /** Ниже этой скорости считаем, что человек стоит, м/с */
 const MOVING_SPEED = 0.6;
@@ -15,6 +27,8 @@ const TRIM_SPEED = 1.5;
 const SPLIT_STOP = 240;
 /** Разрыв между точками дольше этого считается дырой в записи, с */
 const MAX_GAP = 30;
+/** Высота сглаживается по окну ± столько вокруг каждой точки, мс */
+const ALT_SMOOTH = 4000;
 /** Длина отрезка по горизонтали, на котором считается максимальный уклон, м */
 const SLOPE_WINDOW = 40;
 
@@ -74,7 +88,7 @@ function smooth(points: TrackPoint[], values: number[], halfMs: number): number[
 type Leg = { dir: -1 | 1; from: number; to: number; open: boolean };
 
 /** Делит трек на участки «вниз» и «вверх» по сглаженной высоте (зигзаг с порогом). */
-function findLegs(alt: number[]): { legs: Leg[]; dir: -1 | 0 | 1; extreme: number } {
+function findLegs(alt: number[]): Leg[] {
   const legs: Leg[] = [];
   const n = alt.length;
   let dir: -1 | 0 | 1 = 0;
@@ -108,9 +122,50 @@ function findLegs(alt: number[]): { legs: Leg[]; dir: -1 | 0 | 1; extreme: numbe
       lo = i;
     }
   }
-  const extreme = dir === -1 ? lo : hi;
-  if (dir !== 0) legs.push({ dir, from: start, to: extreme, open: true });
-  return { legs, dir, extreme };
+  if (dir !== 0) legs.push({ dir, from: start, to: dir === -1 ? lo : hi, open: true });
+  return legs;
+}
+
+/**
+ * Неровность, а не настоящий участок: короткий контруклон посреди спуска
+ * или провал посреди подъёма, который подъёмник проходит с ровной скоростью.
+ */
+function isBump(points: TrackPoint[], alt: number[], speed: number[], leg: Leg): boolean {
+  if (Math.abs(alt[leg.from] - alt[leg.to]) >= BUMP) return false;
+  if (leg.dir === 1) return (points[leg.to].t - points[leg.from].t) / 1000 < BUMP_CLIMB;
+  // Вниз между двумя подъёмами. Перед настоящим спуском с подъёмника сходят, и скорость
+  // заметно меняется; на провале линии она остаётся прежней.
+  let lo = leg.from;
+  let hi = leg.to;
+  while (lo > 0 && points[leg.from].t - points[lo - 1].t <= 10000) lo--;
+  while (hi < points.length - 1 && points[hi + 1].t - points[leg.to].t <= 10000) hi++;
+  let min = Infinity;
+  let max = 0;
+  for (let i = lo; i <= hi; i++) {
+    if (speed[i] < min) min = speed[i];
+    if (speed[i] > max) max = speed[i];
+  }
+  return min > TRIM_SPEED && max - min < STEADY_SPREAD;
+}
+
+/** Вливает неровности в соседние участки, чтобы они не дробили спуски и подъёмы. */
+function mergeBumps(points: TrackPoint[], alt: number[], speed: number[], legs: Leg[]): Leg[] {
+  const out: Leg[] = [];
+  for (const leg of legs) {
+    out.push({ ...leg });
+    while (out.length >= 3 && isBump(points, alt, speed, out[out.length - 2])) {
+      const last = out[out.length - 1];
+      const first = out[out.length - 3];
+      out.splice(out.length - 3, 3, { dir: first.dir, from: first.from, to: last.to, open: last.open });
+    }
+  }
+  // Запись ещё идёт, и последний участок пока похож на неровность: считаем, что прежний не закончился.
+  // Иначе спуск «завершался» бы на каждом контруклоне.
+  if (out.length >= 2 && out[out.length - 1].open && isBump(points, alt, speed, out[out.length - 1])) {
+    out.pop();
+    out[out.length - 1].open = true;
+  }
+  return out;
 }
 
 /** Делит участок на части по долгим остановкам и разрывам сигнала. */
@@ -150,9 +205,19 @@ function buildSegment(
   to: number,
   open: boolean
 ): Segment | null {
+  const first = from;
+  const last = to;
   while (from < to && speed[from] < TRIM_SPEED) from++;
   while (to > from && speed[to] < TRIM_SPEED) to--;
   if (to - from < 2) return null;
+
+  // Сглаживание «размазывает» высоту: в первой точке движения она уже учитывает ближайшие
+  // секунды пути. Поэтому высоту начала и конца берём на ширину сглаживания раньше и позже,
+  // не выходя за границы участка. Без этого короткий спуск терял бы половину перепада.
+  let top = from;
+  while (top > first && points[from].t - points[top - 1].t <= ALT_SMOOTH) top--;
+  let bottom = to;
+  while (bottom < last && points[bottom + 1].t - points[to].t <= ALT_SMOOTH) bottom++;
 
   let distance = 0;
   let flatDistance = 0;
@@ -196,11 +261,14 @@ function buildSegment(
   if (!isFinite(minSpeed)) minSpeed = 0;
 
   const duration = (points[to].t - points[from].t) / 1000;
-  const vertical = Math.abs(alt[from] - alt[to]);
+  const vertical = Math.abs(alt[top] - alt[bottom]);
 
-  if (vertical < MIN_VERTICAL) return null;
-  if (kind === 'run' && (distance < MIN_RUN_DISTANCE || duration < MIN_RUN_DURATION)) return null;
-  if (kind === 'lift' && duration < MIN_LIFT_DURATION) return null;
+  if (kind === 'run') {
+    if (vertical < MIN_RUN_VERTICAL || distance < MIN_RUN_DISTANCE || duration < MIN_RUN_DURATION) return null;
+    if (maxSpeed < MIN_RUN_TOP_SPEED) return null;
+  } else if (vertical < MIN_LIFT_VERTICAL || duration < MIN_LIFT_DURATION) {
+    return null;
+  }
 
   return {
     kind,
@@ -213,8 +281,8 @@ function buildSegment(
     movingTime,
     distance,
     vertical,
-    startAlt: alt[from],
-    endAlt: alt[to],
+    startAlt: alt[top],
+    endAlt: alt[bottom],
     avgSpeed: movingTime > 0 ? distance / movingTime : 0,
     maxSpeed,
     minSpeed,
@@ -254,12 +322,16 @@ export function analyze(points: TrackPoint[]): Analysis {
   const alt = smooth(
     points,
     points.map((p) => p.alt),
-    4000
+    ALT_SMOOTH
   );
   const speed = smooth(points, clean, 2500);
   const speedFast = smooth(points, clean, 1000);
 
-  const { legs, dir, extreme } = findLegs(alt);
+  const legs = mergeBumps(points, alt, speed, findLegs(alt));
+  // Последний участок всегда незавершённый: его направление — то, что происходит сейчас
+  const current = legs[legs.length - 1];
+  const dir = current ? current.dir : 0;
+  const extreme = current ? current.to : 0;
   const segments: Segment[] = [];
   let runs = 0;
   let lifts = 0;
@@ -313,8 +385,8 @@ export function analyze(points: TrackPoint[]): Analysis {
 
   let state: LiveState = 'move';
   if (speed[n - 1] < 1) state = 'pause';
-  else if (dir === -1 && alt[n - 1] - alt[extreme] < REVERSAL / 2) state = 'run';
-  else if (dir === 1 && alt[extreme] - alt[n - 1] < REVERSAL / 2) state = 'lift';
+  else if (dir === -1 && alt[n - 1] - alt[extreme] < BUMP / 2) state = 'run';
+  else if (dir === 1 && alt[extreme] - alt[n - 1] < BUMP / 2) state = 'lift';
 
   return {
     segments,

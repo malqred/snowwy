@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ArchiveRestore,
   Bell,
+  Cloud,
   DatabaseBackup,
   FlaskConical,
   Headphones,
@@ -13,10 +15,12 @@ import {
   MonitorSmartphone,
   Moon,
   Layers,
+  LogOut,
   Share,
   Smartphone,
   Sun,
   Trash,
+  Users,
   type IconType,
 } from '@/components/icons';
 import { Button, Card, ICON_STROKE, Label, Screen, Segments, Title } from '@/components/ui';
@@ -25,6 +29,8 @@ import { autoBackup, removeAutoBackup, restoreBackup, shareBackup } from '@/lib/
 import { createSession, deleteEverything, finishSession, insertPoints, setPistes } from '@/lib/db';
 import { generateDemoTrack } from '@/lib/demo';
 import { dateLong, daysWord } from '@/lib/format';
+import { disconnectAccount, useAccount } from '@/lib/friends/cloudflare';
+import { setSharing, useFriends } from '@/lib/friends/store';
 import { updateSettings, useSettings, type GlassLevel, type ThemeMode } from '@/lib/settings';
 import { useTracker } from '@/lib/tracker';
 import { headphonesConnected, say, voiceAvailable } from '@/lib/voice';
@@ -48,7 +54,21 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const settings = useSettings();
   const { recording } = useTracker();
+  const router = useRouter();
+  const account = useAccount();
+  const friends = useFriends();
   const [busy, setBusy] = useState(false);
+
+  const signOut = () => {
+    Alert.alert(
+      'Выйти из аккаунта?',
+      'Приложение забудет ключ доступа. Сервер и группа продолжат работать, вы по-прежнему сможете исключать участников и менять приглашение. Чтобы создать новую группу или удалить сервер, аккаунт нужно будет подключить снова.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Выйти', style: 'destructive', onPress: () => disconnectAccount().catch(() => {}) },
+      ]
+    );
+  };
 
   const addDemo = async () => {
     setBusy(true);
@@ -277,6 +297,60 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Label>Друзья</Label>
+        <Card style={styles.switchRow}>
+          <View style={styles.switchBody}>
+            <View style={styles.rowHead}>
+              <Users size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              <Text style={[styles.rowTitle, { color: t.text }]}>Показывать меня группе</Text>
+            </View>
+            <Text style={[styles.rowSub, { color: t.sub }]}>
+              Пока идёт запись катания, участники вашей группы видят вас на карте; место обновляется раз в 30 секунд.
+              Вне записи и при выключенном переключателе ваше место никуда не отправляется.
+              {friends.group ? '' : ' Сейчас вы не состоите в группе — она создаётся во вкладке «Друзья».'}
+            </Text>
+          </View>
+          <Switch
+            value={settings.friends}
+            onValueChange={setSharing}
+            trackColor={{ true: t.accent, false: t.line }}
+            thumbColor={t.dark && settings.friends ? t.inverse : undefined}
+          />
+        </Card>
+        <Card style={styles.account}>
+          <View style={styles.rowHead}>
+            <Cloud size={18} color={t.text} strokeWidth={ICON_STROKE} />
+            <Text style={[styles.rowTitle, { color: t.text }]}>Аккаунт Cloudflare</Text>
+          </View>
+          <Text style={[styles.rowSub, { color: t.sub }]}>
+            {account.connected
+              ? `Подключён: ${account.accountName ?? 'Cloudflare'}. В нём работает сервер ваших групп.`
+              : account.server
+                ? 'Вы вышли из аккаунта. Сервер и группа продолжают работать; чтобы создать новую группу, подключите аккаунт снова.'
+                : 'Не подключён. Аккаунт нужен только тому, кто создаёт группу: в нём работает её сервер. Чтобы войти в чужую группу, он не нужен.'}
+          </Text>
+        </Card>
+        {account.connected ? (
+          <>
+            <Button title="Выйти из аккаунта" kind="secondary" icon={LogOut} onPress={signOut} />
+            <Button
+              title="Сервер и ключ доступа"
+              kind="secondary"
+              icon={Cloud}
+              onPress={() => router.push('/friends/account')}
+            />
+          </>
+        ) : (
+          <Button
+            title="Подключить аккаунт Cloudflare"
+            kind="secondary"
+            icon={Cloud}
+            onPress={() => router.push('/friends/account')}
+          />
+        )}
+      </View>
+
+      <View style={styles.section}>
         <Label>Резервная копия</Label>
         <Card style={styles.switchRow}>
           <View style={styles.switchBody}>
@@ -319,9 +393,10 @@ export default function SettingsScreen() {
         <Button title="Удалить все записи" kind="danger" icon={Trash} onPress={wipe} disabled={recording} />
         <Text style={[styles.rowSub, { color: t.sub }]}>
           Демо-катание — выдуманный вчерашний день на семь спусков с выдуманными трассами, чтобы посмотреть приложение
-          без выезда на склон. Все записи хранятся только на этом телефоне. Интернет нужен для трёх вещей: погода
-          (Open-Meteo), слой трасс на карте (OpenSnowMap) и названия трасс у спусков (OpenStreetMap). Этим сервисам
-          передаётся только район катания — без самого трека и без ваших результатов.
+          без выезда на склон. Все записи хранятся только на этом телефоне. Интернет нужен для погоды (Open-Meteo),
+          слоя трасс на карте (OpenSnowMap) и названий трасс у спусков (OpenStreetMap): этим сервисам передаётся
+          только район катания — без самого трека и без ваших результатов. Если вы состоите в группе друзей, её
+          серверу во время записи отправляются ваши имя и место в зашифрованном виде.
         </Text>
       </View>
 
@@ -336,6 +411,7 @@ const styles = StyleSheet.create({
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   switchRow: { flexDirection: 'row', alignItems: 'center', padding: space.m, gap: space.m },
   switchBody: { flex: 1, gap: 4 },
+  account: { padding: space.m, gap: 4 },
   rowTitle: { fontSize: 17, fontWeight: '600' },
   rowSub: { fontSize: 13, lineHeight: 18 },
   palettes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
