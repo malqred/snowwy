@@ -44,3 +44,7 @@ example
 
 # скачанные сборки
 /build
+
+# сборка локальных модулей
+modules/*/android/build/
+modules/*/android/.cxx/

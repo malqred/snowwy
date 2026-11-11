@@ -1,9 +1,10 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Field } from '@/components/field';
+import { Prompt } from '@/components/prompt';
 import { LogOut, MapPin, Pencil, QrCode, ScanLine, Trash, UserMinus, Users } from '@/components/icons';
 import { TrackMap, type MapPin as Pin } from '@/components/track-map';
 import { Button, Card, ICON_STROKE, Label, Screen, Title } from '@/components/ui';
@@ -58,6 +59,7 @@ export default function FriendsScreen() {
   const [draft, setDraft] = useState(friends.name);
   const [focus, setFocus] = useState<{ coord: Pin['coord']; n: number } | null>(null);
   const triedAt = useRef(0);
+  const [renaming, setRenaming] = useState(false);
 
   const { group, members } = friends;
   const inGroup = group != null;
@@ -113,18 +115,16 @@ export default function FriendsScreen() {
     router.push('/friends/join');
   };
 
+  const applyName = (text: string) => {
+    if (!text.trim()) return;
+    setDraft(text.trim().slice(0, NAME_MAX));
+    setFriendName(text).catch(() => {});
+  };
+
   const rename = () => {
-    Alert.prompt(
-      'Ваше имя',
-      'Под этим именем вас видят остальные в группе.',
-      (text) => {
-        if (!text.trim()) return;
-        setDraft(text.trim().slice(0, NAME_MAX));
-        setFriendName(text).catch(() => {});
-      },
-      'plain-text',
-      friends.name
-    );
+    // Системный вопрос с полем ввода есть только на iPhone
+    if (Platform.OS !== 'ios') return setRenaming(true);
+    Alert.prompt('Ваше имя', 'Под этим именем вас видят остальные в группе.', applyName, 'plain-text', friends.name);
   };
 
   const kick = (m: Member) => {
@@ -337,6 +337,15 @@ export default function FriendsScreen() {
           onPress={leave}
         />
       </View>
+      <Prompt
+        visible={renaming}
+        title="Ваше имя"
+        message="Под этим именем вас видят остальные в группе."
+        initial={friends.name}
+        maxLength={NAME_MAX}
+        onSubmit={applyName}
+        onClose={() => setRenaming(false)}
+      />
     </Screen>
   );
 }

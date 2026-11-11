@@ -20,6 +20,10 @@ export type Settings = {
   remind: boolean;
   /** Сохранять копию записей после каждого катания. null — ещё не спрашивали */
   backup: boolean | null;
+  /** Android: папка, выбранная для копии (адрес с постоянным доступом); пусто — не выбрана */
+  backupDir: string;
+  /** Android: вопрос о работе в фоне уже задавали */
+  powerAsked: boolean;
   /** Когда копию последний раз сохраняли вне приложения, мс; 0 — никогда */
   backupSharedAt: number;
   /** Называть итоги спуска голосом, если подключены наушники */
@@ -40,6 +44,8 @@ const DEFAULTS: Settings = {
   keepAwake: true,
   remind: true,
   backup: null,
+  backupDir: '',
+  powerAsked: false,
   backupSharedAt: 0,
   voice: false,
   economy: false,

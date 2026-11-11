@@ -1,9 +1,10 @@
 {
   "name": "snowwy",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/ui": "~58.0.27",
+    "@maplibre/maplibre-react-native": "^11.5.1",
     "expo": "~58.0.23",
     "expo-camera": "~58.0.14",
     "expo-constants": "~58.0.15",
@@ -64,5 +65,19 @@
   "private": true,
   "expoWidgetsLiveActivities": [
     "src/widgets/ride-activity.tsx"
-  ]
+  ],
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "exclude": [
+          "@maplibre/maplibre-react-native"
+        ]
+      },
+      "android": {
+        "exclude": [
+          "react-native-maps"
+        ]
+      }
+    }
+  }
 }

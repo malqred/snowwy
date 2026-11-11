@@ -48,10 +48,14 @@ import LogOut from 'lucide-react-native/icons/log-out';
 import Pencil from 'lucide-react-native/icons/pencil';
 import MapPin from 'lucide-react-native/icons/map-pin';
 import KeyRound from 'lucide-react-native/icons/key-round';
+import BatteryCharging from 'lucide-react-native/icons/battery-charging';
+import FolderOpen from 'lucide-react-native/icons/folder-open';
 
 export type { LucideIcon as IconType } from 'lucide-react-native';
 
 export {
+  BatteryCharging,
+  FolderOpen,
   Gauge,
   Zap,
   Route,

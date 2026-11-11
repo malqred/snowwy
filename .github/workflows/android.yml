@@ -1,0 +1,95 @@
+name: Android (.apk)
+
+# Собирает Snowwy.apk для установки на телефон напрямую, без магазина приложений.
+# Запуск: вкладка Actions → «Android (.apk)» → Run workflow — готовый файл попадает в Releases.
+# Пуш в ветку android-dev собирает отладочную версию для эмулятора (x86_64): она берёт код
+# приложения с сервера Expo на компьютере и в Releases не попадает.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [android-dev]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DEV: ${{ github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Установить зависимости
+        run: npm ci
+
+      - name: Проверить алгоритм
+        run: npm test
+
+      - name: Сгенерировать проект Android
+        run: npx expo prebuild --platform android
+
+      # arm64-v8a и armeabi-v7a — телефоны, x86_64 — эмулятор на компьютере.
+      # Подпись — общий отладочный ключ из шаблона Expo: он одинаков во всех сборках,
+      # поэтому новая версия ставится поверх старой без удаления.
+      - name: Собрать приложение
+        working-directory: android
+        run: |
+          if [ "$DEV" = "true" ]; then
+            ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --console=plain
+          else
+            ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64 --console=plain
+          fi
+
+      - name: Назвать файл по версии
+        run: |
+          if [ "$DEV" = "true" ]; then APK=android/app/build/outputs/apk/debug/app-debug.apk; else APK=android/app/build/outputs/apk/release/app-release.apk; fi
+          test -f "$APK" || { echo "Сборка не дала .apk"; exit 1; }
+          # Номер сборки берётся из поля version в app.json: Snowwy-1.0.2.apk
+          VERSION=$(node -p "require('./app.json').expo.version")
+          NAME="Snowwy-$VERSION"
+          if [ "$DEV" = "true" ]; then NAME="$NAME-dev"; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "NAME=$NAME" >> "$GITHUB_ENV"
+          mkdir -p out
+          cp "$APK" "out/$NAME.apk"
+          ls -lh "out/$NAME.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}-android
+          path: out/${{ env.NAME }}.apk
+          retention-days: 30
+
+      # Файл кладётся в тот же релиз, что и .ipa для iPhone
+      - name: Опубликовать в Releases
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$VERSION"
+          FILE="out/$NAME.apk"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$FILE" --clobber
+          else
+            gh release create "$TAG" "$FILE" \
+              --title "Snowwy $VERSION" \
+              --notes "Snowwy-$VERSION.apk — для Android, ставится прямо с телефона. Snowwy-$VERSION.ipa — для iPhone, ставится через iLoader или Sideloadly. Инструкции — в README." \
+              --target "${{ github.sha }}"
+          fi

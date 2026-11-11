@@ -23,7 +23,7 @@ export type MapPin = {
   dim?: boolean;
 };
 
-type Props = {
+export type Props = {
   lines: MapLine[];
   /** Люди на карте (вкладка «Друзья») */
   pins?: MapPin[];

@@ -1,15 +1,17 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   ArchiveRestore,
+  BatteryCharging,
   Bell,
   Cloud,
   DatabaseBackup,
   FlaskConical,
+  FolderOpen,
   Headphones,
   Leaf,
   MonitorSmartphone,
@@ -25,16 +27,19 @@ import {
 } from '@/components/icons';
 import { Button, Card, ICON_STROKE, Label, Screen, Segments, Title } from '@/components/ui';
 import { analyze } from '@/lib/analyze';
-import { autoBackup, removeAutoBackup, restoreBackup, shareBackup } from '@/lib/backup';
+import { autoBackup, chooseBackupFolder, removeAutoBackup, restoreBackup, shareBackup } from '@/lib/backup';
 import { createSession, deleteEverything, finishSession, insertPoints, setPistes } from '@/lib/db';
 import { generateDemoTrack } from '@/lib/demo';
 import { dateLong, daysWord } from '@/lib/format';
 import { disconnectAccount, useAccount } from '@/lib/friends/cloudflare';
 import { setSharing, useFriends } from '@/lib/friends/store';
+import { askBackground, openBackgroundSettings, powerAvailable, useBackgroundAllowed, vendorGuide } from '@/lib/power';
 import { updateSettings, useSettings, type GlassLevel, type ThemeMode } from '@/lib/settings';
 import { useTracker } from '@/lib/tracker';
 import { headphonesConnected, say, voiceAvailable } from '@/lib/voice';
 import { PALETTES, space, swatches, useTheme } from '@/theme';
+
+const ANDROID = Platform.OS === 'android';
 
 const THEMES: { value: ThemeMode; title: string; icon: IconType }[] = [
   { value: 'system', title: 'Системная', icon: MonitorSmartphone },
@@ -58,6 +63,8 @@ export default function SettingsScreen() {
   const account = useAccount();
   const friends = useFriends();
   const [busy, setBusy] = useState(false);
+  const backgroundOk = useBackgroundAllowed();
+  const guide = vendorGuide();
 
   const signOut = () => {
     Alert.alert(
@@ -109,10 +116,21 @@ export default function SettingsScreen() {
     }
   };
 
-  const toggleBackup = (backup: boolean) => {
+  const toggleBackup = async (backup: boolean) => {
+    // На Android копия кладётся в папку, которую выбирает человек
+    if (backup && ANDROID && !settings.backupDir && !(await chooseBackupFolder())) return;
     updateSettings({ backup });
     if (backup) autoBackup();
     else removeAutoBackup();
+  };
+
+  const changeFolder = async () => {
+    if (!(await chooseBackupFolder())) return;
+    const ok = await autoBackup();
+    Alert.alert(
+      ok ? 'Готово' : 'Не получилось',
+      ok ? 'Копия сохранена в новую папку.' : 'В эту папку записать не удалось. Выберите другую.'
+    );
   };
 
   const saveCopy = async () => {
@@ -207,7 +225,7 @@ export default function SettingsScreen() {
         </View>
         <Text style={[styles.rowSub, { color: t.sub }]}>
           Расцветка меняет и светлую, и тёмную тему. Спуски всегда оранжевые, подъёмники синие. Иконка приложения и
-          заставка при запуске остаются синими, окно на экране блокировки — чёрным.
+          заставка при запуске остаются синими{ANDROID ? '' : ', окно на экране блокировки — чёрным'}.
         </Text>
       </View>
 
@@ -283,7 +301,8 @@ export default function SettingsScreen() {
             </View>
             <Text style={[styles.rowSub, { color: t.sub }]}>
               При заблокированном экране точки GPS обрабатываются пачками раз в 10 секунд. Сами точки пишутся все, как
-              обычно, поэтому спуски считаются так же точно; окно на экране блокировки, островок и ассистент
+              обычно, поэтому спуски считаются так же точно;{' '}
+              {ANDROID ? 'уведомление о ходе катания и ассистент' : 'окно на экране блокировки, островок и ассистент'}{' '}
               запаздывают на несколько секунд. Применится после следующего старта или паузы.
             </Text>
           </View>
@@ -295,6 +314,44 @@ export default function SettingsScreen() {
           />
         </Card>
       </View>
+
+      {powerAvailable ? (
+        <View style={styles.section}>
+          <Label>Работа в фоне</Label>
+          <Card style={styles.account}>
+            <View style={styles.rowHead}>
+              <BatteryCharging size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              <Text style={[styles.rowTitle, { color: t.text }]}>
+                {backgroundOk ? 'Ограничение Android снято' : 'Android может закрыть Snowwy'}
+              </Text>
+            </View>
+            <Text style={[styles.rowSub, { color: t.sub }]}>
+              {backgroundOk
+                ? 'Система не будет останавливать запись ради экономии батареи.'
+                : 'Ради экономии батареи система может остановить запись, пока телефон лежит в кармане. Разрешите Snowwy работать в фоне без ограничений.'}{' '}
+              На многих телефонах этого мало: у производителя есть ещё и своя защита, она выключается вручную.
+            </Text>
+            <Text style={[styles.rowSub, styles.guideHead, { color: t.text }]}>{guide.brand}</Text>
+            {guide.steps.map((step, i) => (
+              <Text key={i} style={[styles.rowSub, { color: t.sub }]}>
+                {i + 1}. {step}
+              </Text>
+            ))}
+            <Text style={[styles.rowSub, { color: t.sub }]}>
+              Названия пунктов зависят от версии системы и могут немного отличаться.
+            </Text>
+          </Card>
+          {backgroundOk ? null : (
+            <Button title="Разрешить работу в фоне" icon={BatteryCharging} onPress={() => askBackground()} />
+          )}
+          <Button
+            title="Открыть настройки автозапуска"
+            kind="secondary"
+            icon={Smartphone}
+            onPress={openBackgroundSettings}
+          />
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <Label>Друзья</Label>
@@ -359,9 +416,9 @@ export default function SettingsScreen() {
               <Text style={[styles.rowTitle, { color: t.text }]}>Копия после катания</Text>
             </View>
             <Text style={[styles.rowSub, { color: t.sub }]}>
-              После каждого катания обновляется файл со всеми записями: «Файлы» → «На iPhone» → Snowwy →
-              Snowwy-backup.db. Если удалить приложение, файл пропадёт вместе с ним — время от времени сохраняйте копию
-              в другое место кнопкой ниже.
+              {ANDROID
+                ? 'После каждого катания обновляется файл Snowwy-backup.db со всеми записями в папке, которую вы выберете, — например, в «Документах». Он остаётся в телефоне, даже если удалить приложение. Потерять его можно вместе с телефоном, поэтому время от времени сохраняйте копию в другое место кнопкой ниже.'
+                : 'После каждого катания обновляется файл со всеми записями: «Файлы» → «На iPhone» → Snowwy → Snowwy-backup.db. Если удалить приложение, файл пропадёт вместе с ним — время от времени сохраняйте копию в другое место кнопкой ниже.'}
             </Text>
           </View>
           <Switch
@@ -371,6 +428,9 @@ export default function SettingsScreen() {
             thumbColor={t.dark && settings.backup ? t.inverse : undefined}
           />
         </Card>
+        {ANDROID && settings.backup ? (
+          <Button title="Выбрать другую папку" kind="secondary" icon={FolderOpen} onPress={changeFolder} disabled={busy} />
+        ) : null}
         <Button title="Сохранить копию в другое место" kind="secondary" icon={Share} onPress={saveCopy} disabled={busy} />
         <Button
           title="Восстановить из копии"
@@ -382,7 +442,7 @@ export default function SettingsScreen() {
         <Text style={[styles.rowSub, { color: t.sub }]}>
           {settings.backupSharedAt > 0
             ? `Последний раз копию сохраняли в другое место ${dateLong(settings.backupSharedAt)}.`
-            : 'Копию ещё ни разу не сохраняли в другое место (iCloud Drive, компьютер, мессенджер).'}{' '}
+            : `Копию ещё ни разу не сохраняли в другое место (${ANDROID ? 'Google Диск' : 'iCloud Drive'}, компьютер, мессенджер).`}{' '}
           При восстановлении добавляются только дни, которых нет в истории.
         </Text>
       </View>
@@ -420,5 +480,6 @@ const styles = StyleSheet.create({
   swatches: { flexDirection: 'row', alignSelf: 'stretch', height: 34, borderRadius: 17, overflow: 'hidden' },
   swatch: { flex: 1 },
   paletteTitle: { fontSize: 14, fontWeight: '600' },
+  guideHead: { fontWeight: '600', marginTop: 6 },
   version: { fontSize: 13, textAlign: 'center' },
 });

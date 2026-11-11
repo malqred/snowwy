@@ -2,7 +2,7 @@
   "expo": {
     "name": "Snowwy",
     "slug": "snowwy",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "snowwy",
@@ -45,7 +45,9 @@
         {
           "locationWhenInUsePermission": "Snowwy использует геопозицию, чтобы записывать ваши спуски: скорость, расстояние и перепад высот.",
           "locationAlwaysAndWhenInUsePermission": "Snowwy использует геопозицию в фоне, чтобы запись спусков продолжалась при заблокированном экране.",
-          "isIosBackgroundLocationEnabled": true
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false
         }
       ],
       "expo-sqlite",
@@ -60,7 +62,9 @@
       [
         "expo-notifications",
         {
-          "enableRemoteNotifications": false
+          "enableRemoteNotifications": false,
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#2F6FED"
         }
       ],
       [
@@ -81,6 +85,21 @@
     ],
     "experiments": {
       "reactCompiler": true
+    },
+    "android": {
+      "package": "app.snowwy.tracker",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-foreground.png",
+        "backgroundImage": "./assets/images/adaptive-background.png",
+        "monochromeImage": "./assets/images/adaptive-foreground.png"
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     }
   }
 }

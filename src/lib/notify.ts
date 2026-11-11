@@ -1,13 +1,19 @@
 import * as Notifications from 'expo-notifications';
 
-// Показываем уведомления и тогда, когда приложение открыто
+import { RIDE_NOTIFICATION } from './ride-notification';
+
+// Показываем уведомления и тогда, когда приложение открыто.
+// Уведомление о ходе катания (Android) — молча и без всплывающей плашки.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const quiet = notification.request.identifier === RIDE_NOTIFICATION;
+    return {
+      shouldShowBanner: !quiet,
+      shouldShowList: true,
+      shouldPlaySound: !quiet,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 /** Спрашивает разрешение на уведомления, если его ещё нет. */

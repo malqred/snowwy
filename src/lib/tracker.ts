@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import { Barometer } from 'expo-sensors';
 import * as TaskManager from 'expo-task-manager';
 import { useSyncExternalStore } from 'react';
+import { Platform } from 'react-native';
 
 import { analyze, EMPTY_ANALYSIS, haversine } from './analyze';
 import { autoBackup } from './backup';
@@ -17,6 +18,9 @@ import type { Analysis, TrackPoint } from './types';
 import { dayPhrase, liftPhrase, runPhrase, say } from './voice';
 import { fetchWeather } from './weather';
 
+const ANDROID = Platform.OS === 'android';
+/** Как называется телефон в подсказках */
+const PHONE = ANDROID ? 'телефона' : 'iPhone';
 const TASK = 'snowwy-location';
 const KEEP_AWAKE_TAG = 'snowwy-recording';
 /** Точки с худшей точностью отбрасываем, м */
@@ -305,11 +309,26 @@ const PAUSE_OPTIONS = {
   deferredUpdatesInterval: 60000,
 } as const;
 
+/**
+ * Android разрешает получать геопозицию при заблокированном экране, только пока в шторке
+ * висит уведомление приложения. С ним не нужно разрешение «всегда», хватает «при использовании».
+ */
+const ANDROID_SERVICE = {
+  foregroundService: {
+    notificationTitle: 'Snowwy записывает катание',
+    notificationBody: 'Запись идёт и при заблокированном экране.',
+    notificationColor: '#2F6FED',
+    // Смахнули приложение из списка недавних — запись продолжается
+    killServiceOnDestroy: false,
+  },
+} as const;
+
 /** Настройки фоновой записи во время катания. */
 function fullOptions() {
   return {
     ...WATCH_OPTIONS,
     ...TASK_OPTIONS,
+    ...(ANDROID ? ANDROID_SERVICE : null),
     showsBackgroundLocationIndicator: true,
     // Экономия заряда: при заблокированном экране точки копятся и приходят пачкой.
     // Ни одна точка при этом не теряется, меняется только частота обработки.
@@ -329,6 +348,8 @@ const TASK_OPTIONS = {
  * достаточно вернуть ей полную точность (это можно и при заблокированном экране).
  */
 async function startLocation(resume = false): Promise<boolean> {
+  // На Android геопозиция на паузе не переключалась — она уже идёт в полную силу
+  if (resume && usingTask && ANDROID) return true;
   if (resume && usingTask) {
     try {
       await Location.startLocationUpdatesAsync(TASK, fullOptions());
@@ -341,7 +362,7 @@ async function startLocation(resume = false): Promise<boolean> {
   usingTask = false;
   if (!isRunningInExpoGo()) {
     try {
-      await Location.requestBackgroundPermissionsAsync();
+      if (!ANDROID) await Location.requestBackgroundPermissionsAsync();
       await Location.startLocationUpdatesAsync(TASK, fullOptions());
       usingTask = true;
     } catch {
@@ -366,6 +387,10 @@ async function stopLocation() {
 
 /** Переводит геопозицию в режим паузы. Не получилось — выключает совсем. */
 async function idleLocation() {
+  // Android не даёт перезапустить фоновую геопозицию, пока приложение свёрнуто, а пауза
+  // и «Продолжить» нажимаются и из шторки. Поэтому на паузе геопозиция работает как раньше,
+  // просто точки не записываются.
+  if (usingTask && ANDROID) return;
   if (usingTask) {
     try {
       await Location.startLocationUpdatesAsync(TASK, {
@@ -391,8 +416,11 @@ async function startBarometer(): Promise<boolean> {
     if (!perm.granted) return false;
     Barometer.setUpdateInterval(1000);
     baroSub = Barometer.addListener((m) => {
-      if (m.relativeAltitude == null) return;
-      baroLog.push({ t: Date.now(), alt: m.relativeAltitude });
+      // iPhone сразу отдаёт изменение высоты, Android — только давление: высоту считаем
+      // по стандартной атмосфере. Абсолютная ошибка не важна, её убирает привязка к GPS.
+      const alt = m.relativeAltitude ?? (m.pressure > 0 ? 44330 * (1 - Math.pow(m.pressure / 1013.25, 0.1903)) : null);
+      if (alt == null) return;
+      baroLog.push({ t: Date.now(), alt });
       if (baroLog.length > BARO_KEEP) baroLog.shift();
     });
     return true;
@@ -417,11 +445,15 @@ export async function startRecording(): Promise<string | null> {
 
   const perm = await Location.requestForegroundPermissionsAsync();
   if (!perm.granted) {
-    return 'Нет доступа к геопозиции. Разрешите его в Настройках iPhone → Snowwy → Геопозиция.';
+    return ANDROID
+      ? 'Нет доступа к геопозиции. Разрешите его в настройках телефона: Приложения → Snowwy → Разрешения → Местоположение.'
+      : 'Нет доступа к геопозиции. Разрешите его в Настройках iPhone → Snowwy → Геопозиция.';
   }
   if (!(await Location.hasServicesEnabledAsync())) {
-    return 'Службы геолокации выключены. Включите их в Настройках iPhone.';
+    return `Службы геолокации выключены. Включите их в настройках ${PHONE}.`;
   }
+  // Без разрешения на уведомления Android не покажет ни значок записи, ни кнопки в шторке
+  if (ANDROID) await ensureNotifyPermission();
 
   const startedAt = Date.now();
   const sessionId = await db.createSession(startedAt);

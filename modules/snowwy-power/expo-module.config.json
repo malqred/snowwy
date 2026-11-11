@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["app.snowwy.power.SnowwyPowerModule"]
+  }
+}

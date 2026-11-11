@@ -1,10 +1,11 @@
 import { Camera, CameraView } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { Field } from '@/components/field';
 import { ScanLine, Users } from '@/components/icons';
+import { QrScanner } from '@/components/qr-scanner';
 import { Button, Card, Label, Screen } from '@/components/ui';
 import { errorText } from '@/lib/friends/api';
 import { parseInvite } from '@/lib/friends/codec';
@@ -20,6 +21,7 @@ export default function JoinScreen() {
   const [name, setName] = useState(friends.name);
   const [code, setCode] = useState(d ?? '');
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
   // Имя на момент срабатывания сканера: он живёт дольше одного кадра экрана
   const nameRef = useRef(name);
   useEffect(() => {
@@ -68,9 +70,16 @@ export default function JoinScreen() {
   const scan = async () => {
     const permission = await Camera.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Нет доступа к камере', 'Разрешите его в Настройках iPhone → Snowwy → Камера или вставьте приглашение текстом.');
+      Alert.alert(
+        'Нет доступа к камере',
+        Platform.OS === 'ios'
+          ? 'Разрешите его в Настройках iPhone → Snowwy → Камера или вставьте приглашение текстом.'
+          : 'Разрешите его в настройках телефона: Приложения → Snowwy → Разрешения → Камера. Или вставьте приглашение текстом.'
+      );
       return;
     }
+    // На Android — свой сканер: системному нужны сервисы Google
+    if (Platform.OS !== 'ios') return setScanning(true);
     const sub = CameraView.onModernBarcodeScanned(({ data }) => {
       sub.remove();
       CameraView.dismissScanner().catch(() => {});
@@ -142,6 +151,15 @@ export default function JoinScreen() {
           выключается во вкладке «Друзья» и в настройках.
         </Text>
       </Card>
+      <QrScanner
+        visible={scanning}
+        onClose={() => setScanning(false)}
+        onScan={(data) => {
+          setScanning(false);
+          setCode(data);
+          confirm(data);
+        }}
+      />
     </Screen>
   );
 }

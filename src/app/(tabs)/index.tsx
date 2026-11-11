@@ -22,6 +22,8 @@ import {
   stopRecording,
   useTracker,
 } from '@/lib/tracker';
+import { askBackground, backgroundAllowed, powerAvailable } from '@/lib/power';
+import { getSettings, updateSettings } from '@/lib/settings';
 import type { LiveState } from '@/lib/types';
 import { space, useTheme } from '@/theme';
 
@@ -56,7 +58,19 @@ export default function RideScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     const error = await startRecording();
     setBusy(false);
-    if (error) Alert.alert('Не удалось начать', error);
+    if (error) return Alert.alert('Не удалось начать', error);
+    // Android: один раз просим не закрывать Snowwy в фоне, иначе запись может оборваться в кармане
+    if (powerAvailable && !getSettings().powerAsked && !backgroundAllowed()) {
+      updateSettings({ powerAsked: true });
+      Alert.alert(
+        'Чтобы запись не оборвалась',
+        'Android закрывает приложения в фоне ради батареи и может остановить запись, пока телефон лежит в кармане. Разрешите Snowwy работать в фоне без ограничений. Позже это настраивается в «Настройки» → «Работа в фоне».',
+        [
+          { text: 'Не сейчас', style: 'cancel' },
+          { text: 'Разрешить', onPress: () => askBackground() },
+        ]
+      );
+    }
   };
 
   const togglePause = async () => {

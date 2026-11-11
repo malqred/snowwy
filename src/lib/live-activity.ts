@@ -5,6 +5,7 @@ import { Image, Platform } from 'react-native';
 import type { RideActivityProps } from '@/widgets/ride-activity';
 
 import { clock, distance, int, kmh, runsWord } from './format';
+import { bindRideButtons, hideRideNotification, showRideNotification } from './ride-notification';
 import type { Analysis, LiveState, TrackPoint } from './types';
 
 /** Как часто обновлять окно на экране блокировки, мс */
@@ -28,6 +29,24 @@ let iconUri: string | undefined;
 let confirming = false;
 let confirmTimer: ReturnType<typeof setTimeout> | null = null;
 let actionsBound = false;
+
+// На Android вместо окна на экране блокировки — постоянное уведомление с теми же данными
+const ANDROID = Platform.OS === 'android';
+let notifying = false;
+let notified = '';
+
+function notify(props: RideActivityProps, paused: boolean) {
+  const title = props.confirm ? 'Завершить катание?' : `${props.state} · ${props.runs} ${props.runsLabel}`;
+  const body = props.confirm
+    ? 'Запись сохранится в истории.'
+    : `${props.distance} · перепад ${props.vertical} · макс. ${props.maxSpeed} км/ч`;
+  const mode = props.confirm ? 'confirm' : paused ? 'paused' : 'ride';
+  // Текущая скорость в уведомление не попадает, поэтому оно меняется редко
+  const next = `${title}|${body}|${mode}`;
+  if (next === notified) return;
+  notified = next;
+  showRideNotification(title, body, mode);
+}
 
 /** Сколько ждать ответа на вопрос о завершении, мс */
 const CONFIRM_FOR = 8000;
@@ -86,6 +105,14 @@ function toProps(startedAt: number, analysis: Analysis, last: TrackPoint | null,
 
 /** Показывает окно с текущим катанием на экране блокировки. */
 export function startRideActivity(startedAt: number, analysis: Analysis) {
+  if (ANDROID) {
+    confirming = false;
+    notifying = true;
+    notified = '';
+    updatedAt = Date.now();
+    notify(toProps(startedAt, analysis, null), false);
+    return;
+  }
   const f = getFactory();
   if (!f) return;
   try {
@@ -113,10 +140,16 @@ export function updateRideActivity(
   paused: boolean,
   force = paused
 ) {
-  if (!instance) return;
+  if (!instance && !notifying) return;
   const now = Date.now();
   if (!force && now - updatedAt < UPDATE_EVERY) return;
   const props = toProps(startedAt, analysis, last, paused);
+  if (notifying) {
+    updatedAt = now;
+    notify(props, paused);
+    return;
+  }
+  if (!instance) return;
   const next = JSON.stringify(props);
   if (next === shown) return;
   shown = next;
@@ -126,6 +159,15 @@ export function updateRideActivity(
 
 /** Убирает окно с экрана блокировки. */
 export function endRideActivity() {
+  if (ANDROID) {
+    notifying = false;
+    notified = '';
+    confirming = false;
+    if (confirmTimer) clearTimeout(confirmTimer);
+    confirmTimer = null;
+    hideRideNotification();
+    return;
+  }
   const f = getFactory();
   if (!f) return;
   try {
@@ -146,14 +188,29 @@ export function endRideActivity() {
  * refresh — перерисовать окно сразу (показать или убрать вопрос).
  */
 export function bindRideActions(onAction: (action: RideAction) => void, refresh: () => void) {
-  if (actionsBound || Platform.OS !== 'ios' || isRunningInExpoGo()) return;
-  actionsBound = true;
+  if (actionsBound) return;
   const ask = (value: boolean) => {
     confirming = value;
     if (confirmTimer) clearTimeout(confirmTimer);
     confirmTimer = value ? setTimeout(() => ask(false), CONFIRM_FOR) : null;
     refresh();
   };
+  if (ANDROID) {
+    actionsBound = true;
+    bindRideButtons((button) => {
+      if (!notifying) return;
+      if (button === 'pause') onAction('pause');
+      else if (button === 'stop') ask(true);
+      else if (button === 'stop-no') ask(false);
+      else {
+        ask(false);
+        onAction('stop');
+      }
+    });
+    return;
+  }
+  if (Platform.OS !== 'ios' || isRunningInExpoGo()) return;
+  actionsBound = true;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const widgets = require('expo-widgets') as typeof import('expo-widgets');
