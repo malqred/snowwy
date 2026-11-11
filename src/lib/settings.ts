@@ -4,16 +4,45 @@ import { Appearance } from 'react-native';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
+/** Насколько «стеклянные» плитки: плотные, тонированное стекло, прозрачное стекло */
+export type GlassLevel = 'solid' | 'tinted' | 'clear';
+
+/** Расцветка приложения */
+export type PaletteId = 'ice' | 'emerald' | 'autumn' | 'sunset' | 'garnet' | 'truffle';
+
 export type Settings = {
   theme: ThemeMode;
+  palette: PaletteId;
+  glass: GlassLevel;
   /** Не гасить экран во время записи */
   keepAwake: boolean;
   /** Напоминать о забытой записи и завершать её после долгого простоя */
   remind: boolean;
+  /** Сохранять копию записей после каждого катания. null — ещё не спрашивали */
+  backup: boolean | null;
+  /** Когда копию последний раз сохраняли вне приложения, мс; 0 — никогда */
+  backupSharedAt: number;
+  /** Называть итоги спуска голосом, если подключены наушники */
+  voice: boolean;
+  /** Экономить заряд: при заблокированном экране обрабатывать точки пачками */
+  economy: boolean;
+  /** Показывать на картах горнолыжные трассы и подъёмники */
+  pistes: boolean;
 };
 
 const KEY = 'settings';
-const DEFAULTS: Settings = { theme: 'system', keepAwake: true, remind: true };
+const DEFAULTS: Settings = {
+  theme: 'system',
+  palette: 'ice',
+  glass: 'tinted',
+  keepAwake: true,
+  remind: true,
+  backup: null,
+  backupSharedAt: 0,
+  voice: false,
+  economy: false,
+  pistes: false,
+};
 
 function load(): Settings {
   try {

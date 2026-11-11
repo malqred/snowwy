@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { Paths } from 'expo-file-system';
+import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 
 import type { Coord, MapLine } from '@/lib/lines';
+import { updateSettings, useSettings } from '@/lib/settings';
 import { useTheme } from '@/theme';
+
+/** Трассы и подъёмники из OpenStreetMap (сервис OpenSnowMap). Нужен интернет. */
+const PISTES_URL = 'https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png';
+/** Загруженные участки карты трасс хранятся неделю и показываются без сети */
+const PISTES_CACHE = `${Paths.cache.uri.replace(/\/+$/, '')}/pistes`;
+const PISTES_MAX_AGE = 7 * 24 * 3600;
 
 type Props = {
   lines: MapLine[];
@@ -20,10 +28,13 @@ export function TrackMap({ lines, live = false, marker, style }: Props) {
   const t = useTheme();
   const map = useRef<MapView>(null);
   const [satellite, setSatellite] = useState(false);
+  const { pistes } = useSettings();
   const [ready, setReady] = useState(false);
 
   // Показываем весь трек, когда карта готова или сменился набор линий
-  const signature = live ? 'live' : `${lines.length}:${lines[0]?.coords.length ?? 0}`;
+  const signature = live
+    ? 'live'
+    : `${lines.length}:${lines[0]?.id}:${lines[0]?.coords.length ?? 0}:${lines[lines.length - 1]?.id}`;
   useEffect(() => {
     if (!ready || live) return;
     const all = lines.flatMap((l) => l.coords);
@@ -45,6 +56,9 @@ export function TrackMap({ lines, live = false, marker, style }: Props) {
         pitchEnabled={false}
         rotateEnabled={false}
         onMapReady={() => setReady(true)}>
+        {pistes ? (
+          <UrlTile urlTemplate={PISTES_URL} maximumZ={18} tileCachePath={PISTES_CACHE} tileCacheMaxAge={PISTES_MAX_AGE} />
+        ) : null}
         {lines.map((l) => (
           <Polyline
             key={l.id}
@@ -62,28 +76,44 @@ export function TrackMap({ lines, live = false, marker, style }: Props) {
           </Marker>
         ) : null}
       </MapView>
-      <Pressable
-        onPress={() => setSatellite((v) => !v)}
-        hitSlop={8}
-        accessibilityRole="button"
-        style={[styles.toggle, { backgroundColor: t.card, borderColor: t.line }]}>
-        <Text style={[styles.toggleText, { color: t.text }]}>{satellite ? 'Схема' : 'Спутник'}</Text>
-      </Pressable>
+      <View style={styles.toggles}>
+        <Pressable
+          onPress={() => updateSettings({ pistes: !pistes })}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityState={{ selected: pistes }}
+          accessibilityLabel="Показывать трассы и подъёмники"
+          style={[
+            styles.toggle,
+            { backgroundColor: pistes ? t.accent : t.card, borderColor: pistes ? t.accent : t.line },
+          ]}>
+          <Text style={[styles.toggleText, { color: pistes ? t.inverse : t.text }]}>Трассы</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setSatellite((v) => !v)}
+          hitSlop={6}
+          accessibilityRole="button"
+          style={[styles.toggle, { backgroundColor: t.card, borderColor: t.line }]}>
+          <Text style={[styles.toggleText, { color: t.text }]}>{satellite ? 'Схема' : 'Спутник'}</Text>
+        </Pressable>
+      </View>
+      {pistes ? (
+        <Text style={[styles.credit, { color: satellite ? '#FFFFFF' : t.sub }]}>© OpenSnowMap, OpenStreetMap</Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    borderRadius: 20,
+    borderRadius: 18,
     borderCurve: 'continuous',
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
+  toggles: { position: 'absolute', top: 10, right: 10, flexDirection: 'row', gap: 6 },
+  credit: { position: 'absolute', left: 10, bottom: 6, fontSize: 10 },
   toggle: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
     paddingHorizontal: 12,
     height: 30,
     borderRadius: 15,

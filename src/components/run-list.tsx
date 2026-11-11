@@ -1,8 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { clock, distance, kmh, num, time } from '@/lib/format';
-import type { Segment } from '@/lib/types';
-import { space, useTheme } from '@/theme';
+import { difficultyInfo } from '@/lib/pistes';
+import type { RunPiste, Segment } from '@/lib/types';
+import { useTheme } from '@/theme';
 
 import { Card, Chevron } from './ui';
 
@@ -11,73 +12,89 @@ type Props = {
   onPress?: (run: Segment) => void;
   /** Подписи к лучшим спускам: номер спуска → текст */
   badges?: Record<number, string>;
+  /** Трассы спусков, если их удалось определить по карте */
+  pistes?: RunPiste[] | null;
 };
 
-/** Список спусков: номер, время, перепад и расстояние, максимальная скорость. */
-export function RunList({ runs, onPress, badges }: Props) {
+/** Спуски отдельными плитками: номер, время, а ниже — перепад, расстояние и скорость. */
+export function RunList({ runs, onPress, badges, pistes }: Props) {
   const t = useTheme();
   return (
-    <Card>
-      {runs.map((run, i) => {
+    <View style={styles.list}>
+      {runs.map((run) => {
         const d = distance(run.distance);
+        const piste = pistes?.find((p) => p.t === run.startedAt);
+        const cells = [
+          { label: 'Перепад', value: num(run.vertical), unit: 'м' },
+          { label: 'Путь', value: d.value, unit: d.unit },
+          { label: 'Макс.', value: kmh(run.maxSpeed), unit: 'км/ч' },
+          { label: 'Средняя', value: kmh(run.avgSpeed), unit: 'км/ч' },
+        ];
         return (
           <Pressable
             key={run.n}
             disabled={!onPress}
             onPress={() => onPress?.(run)}
             accessibilityRole={onPress ? 'button' : undefined}
-            style={({ pressed }) => [
-              styles.row,
-              i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line },
-              pressed && { opacity: 0.6 },
-            ]}>
-            <View style={[styles.badge, { borderColor: t.line }]}>
-              <Text style={[styles.badgeText, { color: t.text }]}>{run.n}</Text>
-            </View>
-            <View style={styles.body}>
-              <Text style={[styles.main, { color: t.text }]}>
-                {num(run.vertical)} м · {d.value} {d.unit}
-              </Text>
-              <Text style={[styles.sub, { color: t.sub }]}>
-                {time(run.startedAt)} · {clock(run.duration)}
-                {run.open ? ' · идёт' : ''}
-              </Text>
-              {badges?.[run.n] ? <Text style={[styles.badgeNote, { color: t.text }]}>{badges[run.n]}</Text> : null}
-            </View>
-            <View style={styles.right}>
-              <Text style={[styles.speed, { color: t.text }]}>{kmh(run.maxSpeed)}</Text>
-              <Text style={[styles.sub, { color: t.sub }]}>км/ч макс.</Text>
-            </View>
-            {onPress ? <Chevron /> : null}
+            accessibilityLabel={`Спуск ${run.n}`}
+            style={({ pressed }) => pressed && { opacity: 0.6 }}>
+            <Card style={styles.tile}>
+              <View style={styles.head}>
+                <View style={[styles.number, { backgroundColor: t.accent }]}>
+                  <Text style={[styles.numberText, { color: t.inverse }]}>{run.n}</Text>
+                </View>
+                <View style={styles.headBody}>
+                  {piste ? (
+                    <View style={styles.piste}>
+                      <View style={[styles.dot, { backgroundColor: difficultyInfo(piste.difficulty).color }]} />
+                      <Text style={[styles.title, { color: t.text }]} numberOfLines={1}>
+                        {piste.name}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <Text style={[piste ? styles.badge : styles.title, { color: piste ? t.sub : t.text }]}>
+                    {time(run.startedAt)} · {clock(run.duration)}
+                    {run.open ? ' · идёт' : ''}
+                  </Text>
+                  {badges?.[run.n] ? <Text style={[styles.badge, { color: t.sub }]}>{badges[run.n]}</Text> : null}
+                </View>
+                {onPress ? <Chevron /> : null}
+              </View>
+              <View style={styles.cells}>
+                {cells.map((c) => (
+                  <View key={c.label} style={styles.cell}>
+                    <Text style={[styles.label, { color: t.sub }]} numberOfLines={1}>
+                      {c.label}
+                    </Text>
+                    <Text style={[styles.value, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                      {c.value}
+                      <Text style={[styles.unit, { color: t.sub }]}> {c.unit}</Text>
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
           </Pressable>
         );
       })}
-    </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: space.m,
-    paddingVertical: 12,
-    gap: 12,
-    minHeight: 64,
-  },
-  badge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  body: { flex: 1, gap: 2 },
-  main: { fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  sub: { fontSize: 13, fontVariant: ['tabular-nums'] },
-  badgeNote: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-  right: { alignItems: 'flex-end', gap: 2 },
-  speed: { fontSize: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  list: { gap: 10 },
+  tile: { padding: 14, gap: 12 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  number: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  numberText: { fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  headBody: { flex: 1, gap: 2 },
+  title: { fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  badge: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  piste: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
+  cells: { flexDirection: 'row', gap: 8 },
+  cell: { flex: 1, gap: 3 },
+  label: { fontSize: 10, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' },
+  value: { fontSize: 19, fontWeight: '700', letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  unit: { fontSize: 11, fontWeight: '500', letterSpacing: 0 },
 });

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 
 import { analyze } from './analyze';
-import { getPoints, getSession } from './db';
+import { getPoints, getSession, setPistes } from './db';
+import { fetchWays, matchRuns } from './pistes';
 import type { Analysis, Session, TrackPoint } from './types';
 
 export type SessionData = {
@@ -27,7 +28,20 @@ export function useSession(id: number): SessionData | null | undefined {
     })()
       .catch(() => null)
       .then((result) => {
-        if (active) setData(result);
+        if (!active) return;
+        setData(result);
+        // Названия трасс подгружаются из интернета один раз и сохраняются в записи
+        if (!result || result.session.pistes != null || result.session.endedAt == null) return;
+        const runs = result.analysis.segments.filter((s) => s.kind === 'run');
+        if (runs.length === 0) return;
+        fetchWays(result.points)
+          .then((ways) => {
+            if (!ways) return;
+            const pistes = matchRuns(result.points, runs, ways);
+            setPistes(id, pistes).catch(() => {});
+            if (active) setData({ ...result, session: { ...result.session, pistes } });
+          })
+          .catch(() => {});
       });
     return () => {
       active = false;

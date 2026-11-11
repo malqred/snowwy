@@ -64,6 +64,21 @@ export function date(ts: number): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${WEEKDAYS[d.getDay()]}`;
 }
 
+const WEEKDAYS_FULL = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+/** Части даты для плитки дня: число, короткий месяц, день недели. */
+export function dateParts(ts: number): { day: string; month: string; weekday: string } {
+  const d = new Date(ts);
+  return { day: `${d.getDate()}`, month: MONTHS_SHORT[d.getMonth()], weekday: WEEKDAYS_FULL[d.getDay()] };
+}
+
+/** Короткая дата: 15 янв 2026. */
+export function dateShort(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 /** Дата с годом: 15 января 2026. */
 export function dateLong(ts: number): string {
   const d = new Date(ts);

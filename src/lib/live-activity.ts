@@ -24,6 +24,15 @@ let instance: LiveActivity<RideActivityProps> | null = null;
 let shown = '';
 let updatedAt = 0;
 let iconUri: string | undefined;
+/** В островке показан вопрос «Завершить катание?» */
+let confirming = false;
+let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+let actionsBound = false;
+
+/** Сколько ждать ответа на вопрос о завершении, мс */
+const CONFIRM_FOR = 8000;
+
+export type RideAction = 'pause' | 'stop';
 
 /**
  * Адрес файла со знаком приложения внутри установленного приложения.
@@ -64,6 +73,7 @@ function toProps(startedAt: number, analysis: Analysis, last: TrackPoint | null,
     startedAt,
     frozen: paused ? clock((Date.now() - startedAt) / 1000) : '',
     icon: getIconUri(),
+    confirm: confirming,
     state: paused ? 'На паузе' : last ? STATE_TITLE[state] : 'Ищем GPS…',
     runs: `${totals.runs}`,
     runsLabel: runsWord(totals.runs),
@@ -81,6 +91,7 @@ export function startRideActivity(startedAt: number, analysis: Analysis) {
   try {
     // Окна, оставшиеся от прошлого запуска, убираем
     for (const old of f.getInstances()) old.end('immediate').catch(() => {});
+    confirming = false;
     const props = toProps(startedAt, analysis, null);
     instance = f.start(props, 'snowwy://');
     shown = JSON.stringify(props);
@@ -124,4 +135,39 @@ export function endRideActivity() {
   }
   instance = null;
   shown = '';
+  confirming = false;
+  if (confirmTimer) clearTimeout(confirmTimer);
+  confirmTimer = null;
+}
+
+/**
+ * Подключает кнопки островка. Нажатия приходят, пока приложение живо в фоне.
+ * «Завершить» срабатывает со второго нажатия: сначала в островке появляется вопрос.
+ * refresh — перерисовать окно сразу (показать или убрать вопрос).
+ */
+export function bindRideActions(onAction: (action: RideAction) => void, refresh: () => void) {
+  if (actionsBound || Platform.OS !== 'ios' || isRunningInExpoGo()) return;
+  actionsBound = true;
+  const ask = (value: boolean) => {
+    confirming = value;
+    if (confirmTimer) clearTimeout(confirmTimer);
+    confirmTimer = value ? setTimeout(() => ask(false), CONFIRM_FOR) : null;
+    refresh();
+  };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const widgets = require('expo-widgets') as typeof import('expo-widgets');
+    widgets.addUserInteractionListener((event) => {
+      if (!instance) return;
+      if (event.target === 'pause') onAction('pause');
+      else if (event.target === 'stop') ask(true);
+      else if (event.target === 'stop-no') ask(false);
+      else if (event.target === 'stop-yes') {
+        ask(false);
+        onAction('stop');
+      }
+    });
+  } catch {
+    actionsBound = false;
+  }
 }

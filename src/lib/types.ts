@@ -77,10 +77,44 @@ export type Analysis = {
   speed: number[];
 };
 
+/** Погода в начале катания (данные Open-Meteo). */
+export type Weather = {
+  /** Температура и «ощущается как», °C */
+  temp: number;
+  feels: number;
+  /** Ветер и порывы, м/с */
+  wind: number;
+  gusts: number;
+  /** Код погоды ВМО */
+  code: number;
+  /** Свежий снег за последний час, см */
+  snowfall: number;
+  /** Высота снежного покрова, м; null — нет данных */
+  snowDepth: number | null;
+};
+
+/** Спуск, для которого нашлась трасса на карте. */
+export type RunPiste = {
+  /** Время начала спуска — по нему спуск находится в записи */
+  t: number;
+  name: string;
+  /** Сложность по карте: novice, easy, intermediate, advanced… */
+  difficulty: string;
+  duration: number;
+  distance: number;
+  vertical: number;
+  maxSpeed: number;
+  avgSpeed: number;
+};
+
 /** Запись в истории (день катания). */
 export type Session = {
   id: number;
   startedAt: number;
   endedAt: number | null;
   totals: Totals | null;
+  /** Погода в начале катания. Нет у старых записей и если не было интернета. */
+  weather: Weather | null;
+  /** Трассы спусков. null — ещё не определяли (или не было интернета) */
+  pistes: RunPiste[] | null;
 };

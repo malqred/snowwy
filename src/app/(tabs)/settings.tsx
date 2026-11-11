@@ -1,21 +1,46 @@
 import Constants from 'expo-constants';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Bell, FlaskConical, MonitorSmartphone, Moon, Smartphone, Sun, Trash, type IconType } from '@/components/icons';
-import { Button, Card, ICON_STROKE, Label, Title } from '@/components/ui';
+import {
+  ArchiveRestore,
+  Bell,
+  DatabaseBackup,
+  FlaskConical,
+  Headphones,
+  Leaf,
+  MonitorSmartphone,
+  Moon,
+  Layers,
+  Share,
+  Smartphone,
+  Sun,
+  Trash,
+  type IconType,
+} from '@/components/icons';
+import { Button, Card, ICON_STROKE, Label, Screen, Segments, Title } from '@/components/ui';
 import { analyze } from '@/lib/analyze';
-import { createSession, deleteEverything, finishSession, insertPoints } from '@/lib/db';
+import { autoBackup, removeAutoBackup, restoreBackup, shareBackup } from '@/lib/backup';
+import { createSession, deleteEverything, finishSession, insertPoints, setPistes } from '@/lib/db';
 import { generateDemoTrack } from '@/lib/demo';
-import { updateSettings, useSettings, type ThemeMode } from '@/lib/settings';
+import { dateLong, daysWord } from '@/lib/format';
+import { updateSettings, useSettings, type GlassLevel, type ThemeMode } from '@/lib/settings';
 import { useTracker } from '@/lib/tracker';
-import { space, useTheme } from '@/theme';
+import { headphonesConnected, say, voiceAvailable } from '@/lib/voice';
+import { PALETTES, space, swatches, useTheme } from '@/theme';
 
-const THEMES: { mode: ThemeMode; title: string; icon: IconType }[] = [
-  { mode: 'system', title: 'Системная', icon: MonitorSmartphone },
-  { mode: 'light', title: 'Светлая', icon: Sun },
-  { mode: 'dark', title: 'Тёмная', icon: Moon },
+const THEMES: { value: ThemeMode; title: string; icon: IconType }[] = [
+  { value: 'system', title: 'Системная', icon: MonitorSmartphone },
+  { value: 'light', title: 'Светлая', icon: Sun },
+  { value: 'dark', title: 'Тёмная', icon: Moon },
+];
+
+// Как в настройках iPhone («Прозрачное» и «Тонированное»), плюс вариант совсем без стекла
+const GLASS: { value: GlassLevel; title: string }[] = [
+  { value: 'solid', title: 'Без стекла' },
+  { value: 'tinted', title: 'Тонированное' },
+  { value: 'clear', title: 'Прозрачное' },
 ];
 
 export default function SettingsScreen() {
@@ -35,13 +60,77 @@ export default function SettingsScreen() {
       const points = generateDemoTrack(start.getTime(), 7, Date.now() % 1000);
       const id = await createSession(start.getTime());
       await insertPoints(id, points);
-      await finishSession(id, points[points.length - 1].t, analyze(points).totals);
+      const analysis = analyze(points);
+      await finishSession(id, points[points.length - 1].t, analysis.totals);
+      const demoPistes = [
+        { name: 'Каскад', difficulty: 'intermediate' },
+        { name: 'Горизонт', difficulty: 'easy' },
+        { name: 'Вираж', difficulty: 'advanced' },
+      ];
+      await setPistes(
+        id,
+        analysis.segments
+          .filter((s) => s.kind === 'run')
+          .map((run, i) => ({
+            t: run.startedAt,
+            ...demoPistes[i % demoPistes.length],
+            duration: run.duration,
+            distance: run.distance,
+            vertical: run.vertical,
+            maxSpeed: run.maxSpeed,
+            avgSpeed: run.avgSpeed,
+          }))
+      );
       Alert.alert('Готово', 'Демо-катание добавлено. Оно появилось во вкладке «История».');
     } catch {
       Alert.alert('Не получилось', 'Не удалось добавить демо-катание. Попробуйте ещё раз.');
     } finally {
       setBusy(false);
     }
+  };
+
+  const toggleBackup = (backup: boolean) => {
+    updateSettings({ backup });
+    if (backup) autoBackup();
+    else removeAutoBackup();
+  };
+
+  const saveCopy = async () => {
+    setBusy(true);
+    try {
+      await shareBackup();
+    } catch {
+      Alert.alert('Не получилось', 'Не удалось подготовить копию. Попробуйте ещё раз.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restore = async () => {
+    setBusy(true);
+    try {
+      const result = await restoreBackup();
+      if (!result) return;
+      const { added, skipped } = result;
+      Alert.alert(
+        added > 0 ? 'Готово' : 'Новых записей нет',
+        added > 0
+          ? `Добавлено: ${added} ${daysWord(added)} катания.${skipped > 0 ? ` Уже были в истории: ${skipped}.` : ''}`
+          : 'Все дни из этой копии уже есть в истории.'
+      );
+    } catch {
+      Alert.alert('Не получилось', 'Этот файл не похож на копию Snowwy или повреждён.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const testVoice = async () => {
+    if (!headphonesConnected()) {
+      Alert.alert('Наушники не подключены', 'Ассистент говорит только в наушниках. Подключите их и попробуйте ещё раз.');
+      return;
+    }
+    await say('Спуск 3. Максимальная скорость 54 километра в час. Перепад 420 метров.');
   };
 
   const wipe = () => {
@@ -52,30 +141,54 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView
-      style={{ backgroundColor: t.bg }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + space.l }]}
-      showsVerticalScrollIndicator={false}>
+    <Screen contentContainerStyle={[styles.content, { paddingTop: insets.top + space.l }]}>
       <Title>Настройки</Title>
 
       <View style={styles.section}>
         <Label>Тема</Label>
-        <View style={[styles.segments, { backgroundColor: t.card, borderColor: t.line }]}>
-          {THEMES.map(({ mode, title, icon: Icon }) => {
-            const active = settings.theme === mode;
+        <Segments options={THEMES} value={settings.theme} onChange={(theme) => updateSettings({ theme })} />
+      </View>
+
+      <View style={styles.section}>
+        <Label icon={Layers}>Стекло</Label>
+        <Segments options={GLASS} value={settings.glass} onChange={(glass) => updateSettings({ glass })} />
+        <Text style={[styles.rowSub, { color: t.sub }]}>
+          Насколько прозрачны плитки и кнопки. «Тонированное» читается лучше на ярком солнце, «Прозрачное» сильнее
+          пропускает фон, «Без стекла» — плотные плитки.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Label>Цвета</Label>
+        <View style={styles.palettes}>
+          {PALETTES.map((p) => {
+            const active = settings.palette === p.id;
             return (
               <Pressable
-                key={mode}
-                onPress={() => updateSettings({ theme: mode })}
+                key={p.id}
+                onPress={() => updateSettings({ palette: p.id })}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
-                style={[styles.segment, active && { backgroundColor: t.accent }]}>
-                <Icon size={16} color={active ? t.inverse : t.text} strokeWidth={ICON_STROKE} />
-                <Text style={[styles.segmentText, { color: active ? t.inverse : t.text }]}>{title}</Text>
+                accessibilityLabel={`Расцветка «${p.title}»`}
+                style={({ pressed }) => [styles.palette, pressed && { opacity: 0.6 }]}>
+                <Card style={[styles.paletteTile, active && { borderWidth: 2, borderColor: t.accent }]}>
+                  <View style={styles.swatches}>
+                    {swatches(p.id).map((color, i) => (
+                      <View key={i} style={[styles.swatch, { backgroundColor: color }]} />
+                    ))}
+                  </View>
+                  <Text style={[styles.paletteTitle, { color: t.text }]} numberOfLines={1}>
+                    {p.title}
+                  </Text>
+                </Card>
               </Pressable>
             );
           })}
         </View>
+        <Text style={[styles.rowSub, { color: t.sub }]}>
+          Расцветка меняет и светлую, и тёмную тему. Спуски всегда оранжевые, подъёмники синие. Иконка приложения и
+          заставка при запуске остаются синими, окно на экране блокировки — чёрным.
+        </Text>
       </View>
 
       <View style={styles.section}>
@@ -87,7 +200,8 @@ export default function SettingsScreen() {
               <Text style={[styles.rowTitle, { color: t.text }]}>Не гасить экран</Text>
             </View>
             <Text style={[styles.rowSub, { color: t.sub }]}>
-              Экран остаётся включённым, пока идёт запись. Применится со следующего катания.
+              Экран остаётся включённым, пока идёт запись и приложение открыто. Это главный расход заряда: если
+              батареи не хватает на день, выключите. Применится после следующего старта или паузы.
             </Text>
           </View>
           <Switch
@@ -104,8 +218,8 @@ export default function SettingsScreen() {
               <Text style={[styles.rowTitle, { color: t.text }]}>Напоминать о записи</Text>
             </View>
             <Text style={[styles.rowSub, { color: t.sub }]}>
-              Через полчаса без движения придёт уведомление, через два часа запись завершится сама. О паузе
-              напомним через час.
+              Если полчаса оставаться на одном месте, придёт уведомление; через два часа запись завершится сама и
+              сохранится. О записи, оставленной на паузе, напомним через час.
             </Text>
           </View>
           <Switch
@@ -118,37 +232,117 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Label>Во время катания</Label>
+        <Card style={styles.switchRow}>
+          <View style={styles.switchBody}>
+            <View style={styles.rowHead}>
+              <Headphones size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              <Text style={[styles.rowTitle, { color: t.text }]}>Ассистент</Text>
+            </View>
+            <Text style={[styles.rowSub, { color: t.sub }]}>
+              Голосом сообщает главное: после спуска — его номер, максимальную скорость и перепад; после подъёма —
+              высоту; при завершении — итог дня. Говорит только в наушниках (Bluetooth-колонку телефон тоже считает
+              наушниками), музыка на это время становится тише.
+            </Text>
+          </View>
+          <Switch
+            value={settings.voice}
+            onValueChange={(voice) => updateSettings({ voice })}
+            trackColor={{ true: t.accent, false: t.line }}
+            thumbColor={t.dark && settings.voice ? t.inverse : undefined}
+          />
+        </Card>
+        {voiceAvailable && settings.voice ? (
+          <Button title="Проверить ассистента" kind="secondary" icon={Headphones} onPress={testVoice} />
+        ) : null}
+        <Card style={styles.switchRow}>
+          <View style={styles.switchBody}>
+            <View style={styles.rowHead}>
+              <Leaf size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              <Text style={[styles.rowTitle, { color: t.text }]}>Экономия заряда</Text>
+            </View>
+            <Text style={[styles.rowSub, { color: t.sub }]}>
+              При заблокированном экране точки GPS обрабатываются пачками раз в 10 секунд. Сами точки пишутся все, как
+              обычно, поэтому спуски считаются так же точно; окно на экране блокировки, островок и ассистент
+              запаздывают на несколько секунд. Применится после следующего старта или паузы.
+            </Text>
+          </View>
+          <Switch
+            value={settings.economy}
+            onValueChange={(economy) => updateSettings({ economy })}
+            trackColor={{ true: t.accent, false: t.line }}
+            thumbColor={t.dark && settings.economy ? t.inverse : undefined}
+          />
+        </Card>
+      </View>
+
+      <View style={styles.section}>
+        <Label>Резервная копия</Label>
+        <Card style={styles.switchRow}>
+          <View style={styles.switchBody}>
+            <View style={styles.rowHead}>
+              <DatabaseBackup size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              <Text style={[styles.rowTitle, { color: t.text }]}>Копия после катания</Text>
+            </View>
+            <Text style={[styles.rowSub, { color: t.sub }]}>
+              После каждого катания обновляется файл со всеми записями: «Файлы» → «На iPhone» → Snowwy →
+              Snowwy-backup.db. Если удалить приложение, файл пропадёт вместе с ним — время от времени сохраняйте копию
+              в другое место кнопкой ниже.
+            </Text>
+          </View>
+          <Switch
+            value={settings.backup === true}
+            onValueChange={toggleBackup}
+            trackColor={{ true: t.accent, false: t.line }}
+            thumbColor={t.dark && settings.backup ? t.inverse : undefined}
+          />
+        </Card>
+        <Button title="Сохранить копию в другое место" kind="secondary" icon={Share} onPress={saveCopy} disabled={busy} />
+        <Button
+          title="Восстановить из копии"
+          kind="secondary"
+          icon={ArchiveRestore}
+          onPress={restore}
+          disabled={busy || recording}
+        />
+        <Text style={[styles.rowSub, { color: t.sub }]}>
+          {settings.backupSharedAt > 0
+            ? `Последний раз копию сохраняли в другое место ${dateLong(settings.backupSharedAt)}.`
+            : 'Копию ещё ни разу не сохраняли в другое место (iCloud Drive, компьютер, мессенджер).'}{' '}
+          При восстановлении добавляются только дни, которых нет в истории.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
         <Label>Данные</Label>
         <Button title="Добавить демо-катание" kind="secondary" icon={FlaskConical} onPress={addDemo} disabled={busy} />
         <Button title="Удалить все записи" kind="danger" icon={Trash} onPress={wipe} disabled={recording} />
         <Text style={[styles.rowSub, { color: t.sub }]}>
-          Демо-катание — выдуманный день на семь спусков, чтобы посмотреть приложение без выезда на склон. Все данные
-          хранятся только на этом телефоне.
+          Демо-катание — выдуманный вчерашний день на семь спусков с выдуманными трассами, чтобы посмотреть приложение
+          без выезда на склон. Все записи хранятся только на этом телефоне. Интернет нужен для трёх вещей: погода
+          (Open-Meteo), слой трасс на карте (OpenSnowMap) и названия трасс у спусков (OpenStreetMap). Этим сервисам
+          передаётся только район катания — без самого трека и без ваших результатов.
         </Text>
       </View>
 
       <Text style={[styles.version, { color: t.sub }]}>Snowwy {Constants.expoConfig?.version ?? ''}</Text>
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: space.m, paddingBottom: 120, gap: space.l },
   section: { gap: space.s },
-  segments: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    borderCurve: 'continuous',
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 4,
-    gap: 4,
-  },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  segment: { flex: 1, flexDirection: 'row', gap: 6, height: 40, borderRadius: 12, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
-  segmentText: { fontSize: 13, fontWeight: '600' },
   switchRow: { flexDirection: 'row', alignItems: 'center', padding: space.m, gap: space.m },
   switchBody: { flex: 1, gap: 4 },
   rowTitle: { fontSize: 17, fontWeight: '600' },
   rowSub: { fontSize: 13, lineHeight: 18 },
+  palettes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  palette: { flexBasis: '30%', flexGrow: 1 },
+  paletteTile: { padding: 10, gap: 8, alignItems: 'center' },
+  swatches: { flexDirection: 'row', alignSelf: 'stretch', height: 34, borderRadius: 17, overflow: 'hidden' },
+  swatch: { flex: 1 },
+  paletteTitle: { fontSize: 14, fontWeight: '600' },
   version: { fontSize: 13, textAlign: 'center' },
 });

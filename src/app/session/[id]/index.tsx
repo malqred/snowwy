@@ -1,29 +1,35 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
-import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
-import { ArrowDownToLine, ArrowUpToLine, CableCar, Download, Gauge, Route, Share, Timer, Trash, TrendingDown, Zap } from '@/components/icons';
+import { DayBreakdown } from '@/components/day-breakdown';
+import { CloudSnow, Download, Route, Scale, Share, Trash, TrendingDown } from '@/components/icons';
 import { RunList } from '@/components/run-list';
 import { ShareCard } from '@/components/share-card';
 import { TrackMap } from '@/components/track-map';
-import { Button, Label, StatGrid } from '@/components/ui';
+import { Button, Card, ICON_STROKE, Label, Plain, Screen, StatStrip, StatTile, useOnAccent } from '@/components/ui';
+import { thin } from '@/lib/analyze';
+import { dayParts } from '@/lib/compare';
 import { deleteSession, listSessions } from '@/lib/db';
-import { date, distance, int, kmh, runsWord, span, time } from '@/lib/format';
+import { date, distance, int, kmh, num, runsWord, span, time } from '@/lib/format';
 import { writeGpx } from '@/lib/gpx';
 import { sessionLines } from '@/lib/lines';
 import { findRecords, runBadges } from '@/lib/records';
 import { useSession } from '@/lib/use-session';
+import { degrees, weatherTitle } from '@/lib/weather';
 import { space, useTheme } from '@/theme';
 
 export default function SessionScreen() {
   const t = useTheme();
   const router = useRouter();
-  const id = Number(useLocalSearchParams<{ id: string }>().id);
+  const params = useLocalSearchParams<{ id: string; share?: string }>();
+  const id = Number(params.id);
   const data = useSession(id);
   const card = useRef<ComponentRef<typeof View>>(null);
-  const [sharing, setSharing] = useState(false);
+  const onAccent = useOnAccent();
+  const [sharing, setSharing] = useState(params.share === '1');
   const [held, setHeld] = useState<string[]>([]);
 
   // Какие личные рекорды поставлены в этот день (если есть с чем сравнивать)
@@ -46,16 +52,16 @@ export default function SessionScreen() {
 
   if (data === undefined) {
     return (
-      <View style={[styles.center, { backgroundColor: t.bg }]}>
+      <Plain style={styles.center}>
         <ActivityIndicator color={t.sub} />
-      </View>
+      </Plain>
     );
   }
   if (data === null) {
     return (
-      <View style={[styles.center, { backgroundColor: t.bg }]}>
+      <Plain style={styles.center}>
         <Text style={{ color: t.sub, fontSize: 15 }}>Запись не найдена</Text>
-      </View>
+      </Plain>
     );
   }
 
@@ -63,7 +69,17 @@ export default function SessionScreen() {
   const { totals, segments } = analysis;
   const runs = segments.filter((s) => s.kind === 'run');
   const d = distance(totals.distance);
-  const total = ((session.endedAt ?? session.startedAt) - session.startedAt) / 1000;
+  const endedAt = session.endedAt ?? session.startedAt;
+  const total = (endedAt - session.startedAt) / 1000;
+  const { weather } = session;
+  const weatherNotes = weather
+    ? [
+        `ощущается ${degrees(weather.feels)}`,
+        `ветер ${num(weather.wind)} м/с${weather.gusts >= weather.wind + 3 ? `, порывы до ${num(weather.gusts)}` : ''}`,
+        weather.snowfall > 0 ? `свежий снег ${num(weather.snowfall, 1)} см/ч` : '',
+        weather.snowDepth != null && weather.snowDepth > 0 ? `снега ${num(weather.snowDepth * 100)} см` : '',
+      ].filter(Boolean)
+    : [];
 
   const shareImage = async () => {
     try {
@@ -98,48 +114,95 @@ export default function SessionScreen() {
   };
 
   return (
-    <ScrollView
-      style={{ backgroundColor: t.bg }}
-      contentContainerStyle={styles.content}
-      contentInsetAdjustmentBehavior="automatic"
-      showsVerticalScrollIndicator={false}>
+    <Screen contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
       <Stack.Screen options={{ title: date(session.startedAt) }} />
 
-      <View style={styles.hero}>
-        <Text style={[styles.heroValue, { color: t.text }]}>
-          {totals.runs} <Text style={[styles.heroLabel, { color: t.sub }]}>{runsWord(totals.runs)}</Text>
-        </Text>
-        <Text style={[styles.heroSub, { color: t.sub }]}>
-          {time(session.startedAt)}–{time(session.endedAt ?? session.startedAt)} · {span(total)}
-        </Text>
-        {held.length > 0 ? (
-          <Text style={[styles.record, { color: t.text }]}>Личный рекорд: {held.join(', ')}</Text>
-        ) : null}
+      <View style={styles.bento}>
+        <Card accent style={styles.big}>
+          <Label color={onAccent}>
+            {time(session.startedAt)}–{time(endedAt)}
+          </Label>
+          <View>
+            <Text style={[styles.bigValue, { color: onAccent }]} numberOfLines={1} adjustsFontSizeToFit>
+              {totals.runs}
+            </Text>
+            <Text style={[styles.bigLabel, { color: onAccent }]}>
+              {runsWord(totals.runs)} · {span(total)}
+            </Text>
+          </View>
+        </Card>
+        <View style={styles.side}>
+          <StatTile fill item={{ icon: Route, label: 'Дистанция', value: d.value, unit: d.unit }} />
+          <StatTile fill item={{ icon: TrendingDown, label: 'Перепад', value: int(totals.vertical), unit: 'м' }} />
+        </View>
       </View>
 
-      <TrackMap lines={sessionLines(points, segments, t)} style={styles.map} />
+      {held.length > 0 ? (
+        <Card style={styles.recordTile}>
+          <Text style={[styles.record, { color: t.text }]}>Личный рекорд: {held.join(', ')}</Text>
+        </Card>
+      ) : null}
 
-      <StatGrid
+      {weather ? (
+        <Card style={styles.weather}>
+          <CloudSnow size={22} color={t.sub} strokeWidth={ICON_STROKE} />
+          <View style={styles.weatherBody}>
+            <Text style={[styles.weatherMain, { color: t.text }]}>
+              {degrees(weather.temp)} · {weatherTitle(weather.code)}
+            </Text>
+            <Text style={[styles.weatherSub, { color: t.sub }]}>{weatherNotes.join(' · ')}</Text>
+          </View>
+        </Card>
+      ) : null}
+
+      <TrackMap
+        lines={
+          segments.length > 0
+            ? sessionLines(points, segments, t)
+            : [
+                {
+                  id: 'all',
+                  coords: thin(points, 400).map((p) => ({ latitude: p.lat, longitude: p.lon })),
+                  color: t.sub,
+                  width: 3,
+                },
+              ]
+        }
+        style={styles.map}
+      />
+
+      <StatStrip
         items={[
-          { icon: Route, label: 'Дистанция', value: d.value, unit: d.unit },
-          { icon: TrendingDown, label: 'Перепад', value: int(totals.vertical), unit: 'м' },
-          { icon: Zap, label: 'Макс. скорость', value: kmh(totals.maxSpeed, 1), unit: 'км/ч' },
-          { icon: Gauge, label: 'Ср. скорость', value: kmh(totals.avgSpeed, 1), unit: 'км/ч' },
-          { icon: Timer, label: 'На спусках', value: span(totals.runTime) },
-          { icon: CableCar, label: 'На подъёмниках', value: span(totals.liftTime) },
-          { icon: ArrowUpToLine, label: 'Верхняя точка', value: int(totals.maxAlt), unit: 'м' },
-          { icon: ArrowDownToLine, label: 'Нижняя точка', value: int(totals.minAlt), unit: 'м' },
+          { label: 'Макс.', value: kmh(totals.maxSpeed, 1), unit: 'км/ч' },
+          { label: 'Средняя', value: kmh(totals.avgSpeed, 1), unit: 'км/ч' },
+          { label: 'Верх', value: int(totals.maxAlt), unit: 'м' },
+          { label: 'Низ', value: int(totals.minAlt), unit: 'м' },
         ]}
       />
+
+      {segments.length > 0 ? (
+        <View style={styles.section}>
+          <Label>На что ушёл день</Label>
+          <DayBreakdown parts={dayParts(segments, session.startedAt, endedAt)} />
+        </View>
+      ) : null}
 
       {runs.length > 0 ? (
         <View style={styles.section}>
           <Label>Спуски</Label>
-          <RunList runs={runs} badges={runBadges(runs)} onPress={(run) => router.push(`/session/${id}/run/${run.n}`)} />
+          <RunList runs={runs} badges={runBadges(runs)} pistes={session.pistes} onPress={(run) => router.push(`/session/${id}/run/${run.n}`)} />
+          {runs.length > 1 ? (
+            <Button
+              title="Сравнить спуски"
+              kind="secondary"
+              icon={Scale}
+              onPress={() => router.push(`/session/${id}/compare`)}
+            />
+          ) : null}
         </View>
       ) : (
         <Text style={[styles.note, { color: t.sub }]}>
-          В этой записи спусков не нашлось: перепад высот оказался слишком мал.
+          В этой записи спусков не нашлось. Спуском считается участок вниз с перепадом от 25 метров.
         </Text>
       )}
 
@@ -160,20 +223,26 @@ export default function SessionScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { paddingHorizontal: space.m, paddingTop: space.s, paddingBottom: space.xl, gap: space.m },
-  hero: { gap: 2 },
-  heroValue: { fontSize: 56, fontWeight: '700', letterSpacing: -1.5, fontVariant: ['tabular-nums'] },
-  heroLabel: { fontSize: 20, fontWeight: '500', letterSpacing: 0 },
-  heroSub: { fontSize: 15, fontVariant: ['tabular-nums'] },
-  record: { fontSize: 15, fontWeight: '600', lineHeight: 21, marginTop: 6 },
+  content: { paddingHorizontal: space.m, paddingTop: space.s, paddingBottom: space.xl, gap: 10 },
+  bento: { flexDirection: 'row', gap: 10 },
+  big: { flex: 1, padding: space.m, justifyContent: 'space-between', minHeight: 196 },
+  side: { flex: 1, gap: 10 },
+  bigValue: { fontSize: 104, fontWeight: '800', letterSpacing: -5, lineHeight: 104, fontVariant: ['tabular-nums'] },
+  bigLabel: { fontSize: 15, fontWeight: '600' },
+  recordTile: { paddingHorizontal: space.m, paddingVertical: 12 },
+  record: { fontSize: 15, fontWeight: '600', lineHeight: 21 },
   map: { height: 300 },
-  section: { gap: space.s },
+  weather: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: space.m },
+  weatherBody: { flex: 1, gap: 2 },
+  weatherMain: { fontSize: 17, fontWeight: '600' },
+  weatherSub: { fontSize: 13, lineHeight: 18 },
+  section: { gap: space.s, marginTop: 6 },
   note: { fontSize: 15, lineHeight: 21 },
   actions: { gap: space.s, marginTop: space.s },
   sheet: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.l, gap: space.l },

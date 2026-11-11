@@ -3,12 +3,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { thin } from '@/lib/analyze';
-import { dateLong, int, km, kmh, runsWord } from '@/lib/format';
+import { dateLong, int, km, kmh, runsWord, span } from '@/lib/format';
 import { project } from '@/lib/lines';
 import type { Segment, Totals, TrackPoint } from '@/lib/types';
 import { useTheme } from '@/theme';
 
 import { Logo } from './logo';
+import { Backdrop } from './ui';
 
 type Props = {
   ref?: Ref<ComponentRef<typeof View>>;
@@ -19,9 +20,9 @@ type Props = {
 };
 
 const WIDTH = 320;
-const SKETCH = { width: WIDTH - 48, height: 170 };
+const SKETCH = { width: WIDTH - 40, height: 150 };
 
-/** Карточка с итогами дня — её снимок отправляется через «Поделиться». */
+/** Карточка с итогами дня — её снимок отправляется через «Поделиться». Цвета берутся из выбранной расцветки. */
 export function ShareCard({ ref, startedAt, totals, points, segments }: Props) {
   const t = useTheme();
   const runs = segments.filter((s) => s.kind === 'run');
@@ -32,36 +33,48 @@ export function ShareCard({ ref, startedAt, totals, points, segments }: Props) {
   ).map((line) => line.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '));
 
   const stats = [
-    { label: 'Дистанция', value: km(totals.distance), unit: 'км' },
-    { label: 'Перепад', value: int(totals.vertical), unit: 'м' },
-    { label: 'Макс.', value: kmh(totals.maxSpeed), unit: 'км/ч' },
+    { label: 'Км', value: km(totals.distance) },
+    { label: 'М вниз', value: int(totals.vertical) },
+    { label: 'Макс. км/ч', value: kmh(totals.maxSpeed) },
+    { label: 'На спусках', value: span(totals.runTime) },
   ];
 
   return (
-    <View ref={ref} collapsable={false} style={[styles.card, { backgroundColor: t.bg }]}>
+    <View ref={ref} collapsable={false} style={styles.card}>
+      <Backdrop />
       <View style={styles.head}>
-        <Logo size={40} color={t.text} />
+        <View style={styles.brand}>
+          <Logo size={26} color={t.text} />
+          <Text style={[styles.brandText, { color: t.text }]}>Snowwy</Text>
+        </View>
         <Text style={[styles.date, { color: t.sub }]}>{dateLong(startedAt)}</Text>
       </View>
 
-      <Svg width={SKETCH.width} height={SKETCH.height}>
-        {paths.map((d, i) => (
-          <Path key={i} d={d} stroke={t.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        ))}
-      </Svg>
-
-      <View>
-        <Text style={[styles.count, { color: t.text }]}>{totals.runs}</Text>
-        <Text style={[styles.countLabel, { color: t.text }]}>{runsWord(totals.runs)}</Text>
+      <View style={[styles.hero, { backgroundColor: t.accent }]}>
+        <Text style={[styles.count, { color: t.inverse }]}>{totals.runs}</Text>
+        <Text style={[styles.countLabel, { color: t.inverse }]}>{runsWord(totals.runs)}</Text>
       </View>
 
-      <View style={[styles.stats, { borderTopColor: t.line }]}>
-        {stats.map((s) => (
-          <View key={s.label} style={styles.stat}>
-            <Text style={[styles.statLabel, { color: t.sub }]}>{s.label}</Text>
-            <Text style={[styles.statValue, { color: t.text }]}>
+      {paths.length > 0 ? (
+        <View style={[styles.sketch, { borderColor: t.line }]}>
+          <Svg width={SKETCH.width} height={SKETCH.height}>
+            {paths.map((d, i) => (
+              <Path key={i} d={d} stroke={t.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            ))}
+          </Svg>
+        </View>
+      ) : null}
+
+      <View style={[styles.stats, { borderColor: t.line }]}>
+        {stats.map((s, i) => (
+          <View
+            key={s.label}
+            style={[styles.stat, i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: t.line }]}>
+            <Text style={[styles.statValue, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit>
               {s.value}
-              <Text style={[styles.statUnit, { color: t.sub }]}> {s.unit}</Text>
+            </Text>
+            <Text style={[styles.statLabel, { color: t.sub }]} numberOfLines={1} adjustsFontSizeToFit>
+              {s.label}
             </Text>
           </View>
         ))}
@@ -71,14 +84,25 @@ export function ShareCard({ ref, startedAt, totals, points, segments }: Props) {
 }
 
 const styles = StyleSheet.create({
-  card: { width: WIDTH, padding: 24, gap: 16 },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginLeft: -8 },
+  card: { width: WIDTH, padding: 20, gap: 12, overflow: 'hidden' },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  brandText: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   date: { fontSize: 13, fontWeight: '500' },
-  count: { fontSize: 72, fontWeight: '700', letterSpacing: -2, lineHeight: 76, fontVariant: ['tabular-nums'] },
-  countLabel: { fontSize: 20, fontWeight: '600', marginTop: -4 },
-  stats: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 14 },
-  stat: { flex: 1, gap: 4 },
-  statLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase' },
-  statValue: { fontSize: 18, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  statUnit: { fontSize: 12, fontWeight: '500' },
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 18,
+    borderCurve: 'continuous',
+  },
+  count: { fontSize: 76, fontWeight: '800', letterSpacing: -3.5, lineHeight: 80, fontVariant: ['tabular-nums'] },
+  countLabel: { fontSize: 20, fontWeight: '600' },
+  sketch: { borderWidth: 1, borderRadius: 18, borderCurve: 'continuous', overflow: 'hidden' },
+  stats: { flexDirection: 'row', borderWidth: 1, borderRadius: 18, borderCurve: 'continuous', paddingVertical: 12 },
+  stat: { flex: 1, alignItems: 'center', gap: 3, paddingHorizontal: 4 },
+  statValue: { fontSize: 18, fontWeight: '700', letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  statLabel: { fontSize: 9, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
 });

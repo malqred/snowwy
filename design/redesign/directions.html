@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Snowwy — направления дизайна</title>
+<style>
+  :root { --ink:#0A1523; --deep:#1F3952; --mid:#4D728F; --sky:#8FB1C9; --ice:#CADCEA; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background:#E9EFF4; font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; padding:48px 56px 56px; width:1500px; }
+  h1 { font-size:30px; color:var(--ink); letter-spacing:-.5px; }
+  .lead { color:var(--mid); font-size:17px; margin:6px 0 34px; }
+  .row { display:flex; gap:60px; }
+  .col { width:420px; }
+  .name { font-size:22px; font-weight:700; color:var(--ink); margin-top:22px; }
+  .desc { font-size:15px; line-height:21px; color:var(--mid); margin-top:6px; }
+  .phone { width:420px; height:880px; border-radius:58px; padding:12px; background:#05090F; box-shadow:0 30px 60px rgba(10,21,35,.28); }
+  .screen { position:relative; width:100%; height:100%; border-radius:47px; overflow:hidden; color:var(--ice); }
+  .island { position:absolute; top:12px; left:50%; width:118px; height:34px; margin-left:-59px; border-radius:20px; background:#000; z-index:9; }
+  .status { position:absolute; top:19px; left:34px; right:34px; display:flex; justify-content:space-between; font-size:15px; font-weight:600; z-index:8; }
+  .num { font-variant-numeric: tabular-nums; }
+  svg { display:block; }
+
+  /* ───── A. Стекло ───── */
+  .a { background:
+        radial-gradient(520px 380px at 85% 8%, rgba(143,177,201,.42), transparent 62%),
+        radial-gradient(460px 420px at 0% 62%, rgba(77,114,143,.5), transparent 65%),
+        linear-gradient(180deg,#132C45 0%, var(--ink) 70%); }
+  .a .pad { padding:74px 20px 0; }
+  .a .top { display:flex; justify-content:space-between; align-items:center; }
+  .glass { background:rgba(202,220,234,.10); border:1px solid rgba(202,220,234,.22); box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 10px 30px rgba(0,0,0,.22); backdrop-filter: blur(22px); }
+  .a .pill { display:flex; align-items:center; gap:8px; height:36px; padding:0 14px; border-radius:18px; font-size:15px; font-weight:600; }
+  .dot { width:8px; height:8px; border-radius:4px; background:#E8695C; box-shadow:0 0 10px #E8695C; }
+  .a .timer { font-size:19px; font-weight:600; }
+  .a .hero { text-align:center; margin:22px 0 18px; }
+  .a .hero b { display:block; font-size:120px; line-height:112px; font-weight:700; letter-spacing:-5px; background:linear-gradient(180deg,#fff, var(--sky)); -webkit-background-clip:text; color:transparent; }
+  .a .hero span { font-size:17px; color:var(--sky); }
+  .a .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .a .cell { border-radius:24px; padding:14px 16px; }
+  .lab { font-size:11px; font-weight:600; letter-spacing:.8px; text-transform:uppercase; color:var(--sky); }
+  .val { font-size:28px; font-weight:600; letter-spacing:-.5px; margin-top:4px; }
+  .val small { font-size:14px; font-weight:500; color:var(--sky); letter-spacing:0; }
+  .a .btns { display:flex; gap:10px; margin-top:12px; }
+  .a .btn { flex:1; height:54px; border-radius:27px; display:flex; align-items:center; justify-content:center; font-size:17px; font-weight:600; }
+  .a .btn.main { background:linear-gradient(180deg,#B9D2E3,var(--sky)); color:var(--ink); border:0; box-shadow:0 10px 24px rgba(143,177,201,.35); }
+  .a .map { margin-top:12px; height:150px; border-radius:26px; position:relative; overflow:hidden; }
+  .tab { position:absolute; left:50%; bottom:22px; transform:translateX(-50%); display:flex; gap:6px; padding:6px; border-radius:34px; }
+  .tab i { font-style:normal; font-size:13px; font-weight:600; padding:12px 18px; border-radius:26px; color:var(--sky); }
+  .tab i.on { background:rgba(202,220,234,.22); color:#fff; }
+
+  /* ───── B. Плитки ───── */
+  .b { background:var(--ink); }
+  .b .pad { padding:74px 16px 0; }
+  .b .top { display:flex; justify-content:space-between; align-items:flex-end; padding:0 6px 14px; }
+  .b .top h2 { font-size:32px; letter-spacing:-.8px; color:#fff; }
+  .b .top span { font-size:15px; color:var(--sky); font-weight:600; }
+  .b .bento { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .tile { border-radius:30px; padding:16px 18px; background:#12233A; }
+  .tile.big { grid-row:span 2; background:var(--sky); color:var(--ink); display:flex; flex-direction:column; justify-content:space-between; }
+  .tile.big .lab { color:var(--deep); }
+  .tile.big b { font-size:112px; line-height:100px; font-weight:800; letter-spacing:-5px; }
+  .tile.big em { font-style:normal; font-size:16px; font-weight:600; }
+  .tile.wide { grid-column:span 2; display:flex; align-items:center; justify-content:space-between; }
+  .tile.deep { background:var(--deep); }
+  .b .val { font-size:34px; font-weight:700; letter-spacing:-1px; color:#fff; }
+  .b .val small { font-size:14px; }
+  .bar { height:8px; border-radius:4px; background:#0A1523; margin-top:12px; overflow:hidden; display:flex; }
+  .bar i { display:block; height:100%; }
+  .b .btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+  .b .btn { height:64px; border-radius:30px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:17px; font-weight:700; background:#12233A; color:#fff; }
+  .b .btn.main { background:var(--ice); color:var(--ink); }
+  .b .tab { background:#12233A; bottom:20px; }
+  .b .tab i.on { background:var(--sky); color:var(--ink); }
+
+  /* ───── C. Прибор ───── */
+  .c { background:linear-gradient(180deg,#0E1E31 0%, var(--ink) 55%); }
+  .c .pad { padding:74px 24px 0; }
+  .c .top { display:flex; justify-content:space-between; align-items:center; font-size:15px; font-weight:600; color:var(--sky); }
+  .c .top b { color:#fff; font-weight:600; }
+  .c .dial { position:relative; width:330px; height:330px; margin:14px auto 0; }
+  .c .dial .mid { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .c .dial b { font-size:104px; line-height:100px; font-weight:300; letter-spacing:-4px; color:#fff; }
+  .c .dial span { font-size:15px; color:var(--sky); letter-spacing:2px; text-transform:uppercase; }
+  .c .dial em { font-style:normal; margin-top:10px; font-size:14px; font-weight:600; color:var(--ink); background:var(--sky); padding:5px 12px; border-radius:12px; }
+  .c .line { display:flex; justify-content:space-between; align-items:baseline; padding:15px 0; border-top:1px solid rgba(143,177,201,.22); }
+  .c .line:first-child { border-top:0; }
+  .c .line span { font-size:15px; color:var(--sky); }
+  .c .line b { font-size:24px; font-weight:500; color:#fff; letter-spacing:-.3px; }
+  .c .line b small { font-size:14px; color:var(--sky); font-weight:400; }
+  .c .btns { display:flex; justify-content:center; gap:26px; margin-top:16px; }
+  .c .round { width:68px; height:68px; border-radius:34px; display:flex; align-items:center; justify-content:center; border:1.5px solid rgba(143,177,201,.5); }
+  .c .round.main { background:var(--ice); border:0; width:84px; height:84px; border-radius:42px; margin-top:-8px; }
+  .c .tab { background:transparent; gap:34px; bottom:26px; }
+  .c .tab i { padding:0; font-size:13px; letter-spacing:.5px; }
+  .c .tab i.on { background:none; color:#fff; border-bottom:2px solid var(--sky); padding-bottom:6px; }
+</style>
+</head>
+<body>
+<h1>Snowwy — три направления нового дизайна</h1>
+<p class="lead">Палитра та же. Везде один и тот же экран — идёт катание, третий спуск. Выберите направление или назовите, что взять из каждого.</p>
+
+<div class="row">
+  <!-- A -->
+  <div class="col">
+    <div class="phone"><div class="screen a">
+      <div class="island"></div><div class="status"><span>9:41</span><span>5G ▮</span></div>
+      <div class="pad">
+        <div class="top"><div class="pill glass"><span class="dot"></span>Спуск</div><div class="timer num">1:42:07</div></div>
+        <div class="hero"><b class="num">3</b><span>спуска</span></div>
+        <div class="grid">
+          <div class="cell glass"><div class="lab">Скорость</div><div class="val num">47 <small>км/ч</small></div></div>
+          <div class="cell glass"><div class="lab">Макс.</div><div class="val num">68 <small>км/ч</small></div></div>
+          <div class="cell glass"><div class="lab">Дистанция</div><div class="val num">7,4 <small>км</small></div></div>
+          <div class="cell glass"><div class="lab">Перепад</div><div class="val num">1 530 <small>м</small></div></div>
+        </div>
+        <div class="btns"><div class="btn glass">Пауза</div><div class="btn main">Завершить</div></div>
+        <div class="map glass">
+          <svg width="376" height="150" viewBox="0 0 376 150"><path d="M30 28 C90 20 110 70 160 62 S230 30 262 70 S300 120 350 118" stroke="#CADCEA" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M350 118 L60 40" stroke="#8FB1C9" stroke-width="2" stroke-dasharray="5 6" fill="none"/><circle cx="262" cy="70" r="7" fill="#fff"/><circle cx="262" cy="70" r="15" fill="rgba(255,255,255,.2)"/></svg>
+        </div>
+      </div>
+      <div class="tab glass"><i class="on">Катание</i><i>История</i><i>Настройки</i></div>
+    </div></div>
+    <div class="name">1. «Стекло»</div>
+    <div class="desc">Как в iOS 26: полупрозрачные карточки на мягком градиенте, плавающая панель вкладок, свечение у главной цифры. Самый «современный айфонный» вид.</div>
+  </div>
+
+  <!-- B -->
+  <div class="col">
+    <div class="phone"><div class="screen b">
+      <div class="island"></div><div class="status"><span>9:41</span><span>5G ▮</span></div>
+      <div class="pad">
+        <div class="top"><h2>Спуск</h2><span class="num">1:42:07</span></div>
+        <div class="bento">
+          <div class="tile big"><div class="lab">Сегодня</div><div><b class="num">3</b><br><em>спуска</em></div></div>
+          <div class="tile"><div class="lab">Скорость</div><div class="val num">47 <small>км/ч</small></div></div>
+          <div class="tile deep"><div class="lab">Макс.</div><div class="val num">68 <small>км/ч</small></div></div>
+          <div class="tile"><div class="lab">Дистанция</div><div class="val num">7,4 <small>км</small></div></div>
+          <div class="tile"><div class="lab">Перепад</div><div class="val num">1 530 <small>м</small></div></div>
+          <div class="tile wide" style="display:block">
+            <div style="display:flex;justify-content:space-between"><div class="lab">На что ушёл день</div><div class="lab">спуски 31%</div></div>
+            <div class="bar"><i style="width:9%;background:#8FB1C9"></i><i style="width:14%;background:#4D728F"></i><i style="width:11%;background:#8FB1C9"></i><i style="width:8%"></i><i style="width:15%;background:#4D728F"></i><i style="width:11%;background:#8FB1C9"></i><i style="width:12%"></i><i style="width:13%;background:#4D728F"></i></div>
+          </div>
+        </div>
+        <div class="btns"><div class="btn">❚❚ Пауза</div><div class="btn main">Завершить</div></div>
+      </div>
+      <div class="tab"><i class="on">Катание</i><i>История</i><i>Настройки</i></div>
+    </div></div>
+    <div class="name">2. «Плитки»</div>
+    <div class="desc">Крупные плотные блоки разного размера, без рамок, жирные цифры. Главное число — на светлой плитке. Легко читается на ходу и в перчатках.</div>
+  </div>
+
+  <!-- C -->
+  <div class="col">
+    <div class="phone"><div class="screen c">
+      <div class="island"></div><div class="status"><span>9:41</span><span>5G ▮</span></div>
+      <div class="pad">
+        <div class="top"><span>Спуск · <b>3-й</b></span><b class="num">1:42:07</b></div>
+        <div class="dial">
+          <svg width="330" height="330" viewBox="0 0 330 330">
+            <path d="M62 268 A146 146 0 1 1 268 268" stroke="rgba(143,177,201,.2)" stroke-width="10" fill="none" stroke-linecap="round"/>
+            <path d="M62 268 A146 146 0 0 1 216 28" stroke="url(#g)" stroke-width="10" fill="none" stroke-linecap="round"/>
+            <defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#4D728F"/><stop offset="1" stop-color="#CADCEA"/></linearGradient></defs>
+            <circle cx="216" cy="28" r="9" fill="#fff"/>
+          </svg>
+          <div class="mid"><b class="num">47</b><span>км/ч</span><em>макс. 68</em></div>
+        </div>
+        <div>
+          <div class="line"><span>Спусков</span><b class="num">3</b></div>
+          <div class="line"><span>Дистанция</span><b class="num">7,4 <small>км</small></b></div>
+          <div class="line"><span>Перепад</span><b class="num">1 530 <small>м</small></b></div>
+        </div>
+        <div class="btns">
+          <div class="round"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="4" y="3" width="5" height="16" rx="1.5" fill="#CADCEA"/><rect x="13" y="3" width="5" height="16" rx="1.5" fill="#CADCEA"/></svg></div>
+          <div class="round main"><svg width="26" height="26" viewBox="0 0 26 26"><rect x="5" y="5" width="16" height="16" rx="4" fill="#0A1523"/></svg></div>
+          <div class="round"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z M9 4v14 M15 6v14" stroke="#CADCEA" stroke-width="1.7" fill="none" stroke-linejoin="round"/></svg></div>
+        </div>
+      </div>
+      <div class="tab"><i class="on">Катание</i><i>История</i><i>Настройки</i></div>
+    </div></div>
+    <div class="name">3. «Прибор»</div>
+    <div class="desc">В центре — шкала скорости, как на спортивных часах. Тонкие цифры, строки вместо карточек, круглые кнопки. Самый строгий и минималистичный.</div>
+  </div>
+</div>
+</body>
+</html>

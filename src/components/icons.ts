@@ -30,6 +30,14 @@ import FlaskConical from 'lucide-react-native/icons/flask-conical';
 import Satellite from 'lucide-react-native/icons/satellite';
 import Map from 'lucide-react-native/icons/map';
 import ListOrdered from 'lucide-react-native/icons/list-ordered';
+import Headphones from 'lucide-react-native/icons/headphones';
+import Leaf from 'lucide-react-native/icons/leaf';
+import DatabaseBackup from 'lucide-react-native/icons/database-backup';
+import ArchiveRestore from 'lucide-react-native/icons/archive-restore';
+import Scale from 'lucide-react-native/icons/scale';
+import CloudSnow from 'lucide-react-native/icons/cloud-snow';
+import Layers from 'lucide-react-native/icons/layers';
+import Coffee from 'lucide-react-native/icons/coffee';
 
 export type { LucideIcon as IconType } from 'lucide-react-native';
 
@@ -64,4 +72,12 @@ export {
   Satellite,
   Map,
   ListOrdered,
+  Headphones,
+  Leaf,
+  DatabaseBackup,
+  ArchiveRestore,
+  Scale,
+  CloudSnow,
+  Layers,
+  Coffee,
 };

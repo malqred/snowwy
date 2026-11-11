@@ -1,12 +1,17 @@
-import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
+import { Button, HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
+  buttonStyle,
+  controlSize,
   font,
   foregroundStyle,
   frame,
+  lineLimit,
+  minimumScaleFactor,
   monospacedDigit,
   multilineTextAlignment,
   padding,
   resizable,
+  tint,
 } from '@expo/ui/swift-ui/modifiers';
 import { createLiveActivity } from 'expo-widgets';
 
@@ -21,6 +26,8 @@ export type RideActivityProps = {
   frozen: string;
   /** Адрес файла со знаком приложения. Пусто — показываем значок лыжника */
   icon: string;
+  /** Показать вместо кнопок вопрос «Завершить катание?» */
+  confirm: boolean;
   /** «Спуск», «Подъём», «Пауза» */
   state: string;
   /** Число спусков и слово к нему: «7» и «спусков» */
@@ -69,8 +76,13 @@ const RideActivity = (props: RideActivityProps) => {
 
   const stat = (label: string, value: string) => (
     <VStack alignment="leading" spacing={2}>
-      <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(muted)]}>{label}</Text>
-      <Text modifiers={[font({ size: 17, weight: 'semibold' }), monospacedDigit()]}>{value}</Text>
+      <Text
+        modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(muted), lineLimit(1), minimumScaleFactor(0.6)]}>
+        {label}
+      </Text>
+      <Text modifiers={[font({ size: 17, weight: 'semibold' }), monospacedDigit(), lineLimit(1), minimumScaleFactor(0.6)]}>
+        {value}
+      </Text>
     </VStack>
   );
 
@@ -86,7 +98,7 @@ const RideActivity = (props: RideActivityProps) => {
             {timer(15, muted, 90)}
           </VStack>
         </HStack>
-        <HStack spacing={12}>
+        <HStack spacing={8}>
           {stat('СКОРОСТЬ', `${props.speed} км/ч`)}
           <Spacer />
           {stat('МАКС.', `${props.maxSpeed} км/ч`)}
@@ -116,13 +128,43 @@ const RideActivity = (props: RideActivityProps) => {
       </VStack>
     ),
     expandedBottom: (
-      <HStack spacing={12} modifiers={[padding({ horizontal: 8, bottom: 4 })]}>
-        <Text modifiers={[font({ size: 14 }), monospacedDigit()]}>{props.speed} км/ч</Text>
-        <Spacer />
-        <Text modifiers={[font({ size: 14 }), monospacedDigit()]}>{props.distance}</Text>
-        <Spacer />
-        <Text modifiers={[font({ size: 14 }), monospacedDigit()]}>{props.vertical}</Text>
-      </HStack>
+      <VStack spacing={8} modifiers={[padding({ horizontal: 8, bottom: 4 })]}>
+        <HStack spacing={12}>
+          <Text modifiers={[font({ size: 14 }), monospacedDigit()]}>{props.speed} км/ч</Text>
+          <Spacer />
+          <Text modifiers={[font({ size: 14 }), monospacedDigit()]}>{props.distance}</Text>
+          <Spacer />
+          <Text modifiers={[font({ size: 14 }), monospacedDigit()]}>{props.vertical}</Text>
+        </HStack>
+        {props.confirm ? (
+          // Второе нажатие — чтобы катание не завершилось от случайного касания
+          <HStack spacing={8}>
+            <Button target="stop-no" label="Не завершать" modifiers={[buttonStyle('bordered'), controlSize('small'), tint('#FFFFFF')]} />
+            <Spacer />
+            <Button
+              target="stop-yes"
+              label="Да, завершить"
+              modifiers={[buttonStyle('borderedProminent'), controlSize('small'), tint('#E8695C')]}
+            />
+          </HStack>
+        ) : (
+          <HStack spacing={8}>
+            <Button
+              target="pause"
+              label={props.frozen ? 'Продолжить' : 'Пауза'}
+              systemImage={props.frozen ? 'play.fill' : 'pause.fill'}
+              modifiers={[buttonStyle('bordered'), controlSize('small'), tint('#FFFFFF')]}
+            />
+            <Spacer />
+            <Button
+              target="stop"
+              label="Завершить"
+              systemImage="flag.checkered"
+              modifiers={[buttonStyle('bordered'), controlSize('small'), tint('#FFFFFF')]}
+            />
+          </HStack>
+        )}
+      </VStack>
     ),
   };
 };

@@ -1,4 +1,4 @@
-import { SPEED_COLORS, type Theme } from '@/theme';
+import { LIFT_COLOR, RUN_COLOR, SPEED_COLORS, type Theme } from '@/theme';
 
 import { thin } from './analyze';
 import type { Segment, TrackPoint } from './types';
@@ -21,8 +21,8 @@ export function sessionLines(points: TrackPoint[], segments: Segment[], theme: T
   return segments.map((s) => ({
     id: `${s.kind}-${s.n}`,
     coords: thin(points.slice(s.from, s.to + 1), s.kind === 'run' ? 250 : 40).map(toCoord),
-    color: s.kind === 'run' ? theme.text : theme.sub,
-    width: s.kind === 'run' ? 3 : 2,
+    color: s.kind === 'run' ? RUN_COLOR : LIFT_COLOR,
+    width: s.kind === 'run' ? 3 : 2.5,
     dashed: s.kind === 'lift',
   }));
 }

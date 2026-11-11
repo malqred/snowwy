@@ -30,8 +30,27 @@ export function haversine(lat1: number, lon1: number, lat2: number, lon2: number
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
+/**
+ * Убирает одиночные всплески скорости: значение, которое намного выше соседних,
+ * заменяется их медианой. Настоящий разгон так не выглядит — соседние точки растут вместе с ним.
+ */
+export function despike(points: TrackPoint[]): number[] {
+  const n = points.length;
+  const out = points.map((p) => p.speed);
+  const around = [0, 0, 0, 0, 0];
+  for (let i = 2; i < n - 2; i++) {
+    // Соседи должны быть рядом по времени, иначе сравнивать не с чем
+    if (points[i + 2].t - points[i - 2].t > 10000) continue;
+    for (let k = 0; k < 5; k++) around[k] = points[i - 2 + k].speed;
+    around.sort((a, b) => a - b);
+    const median = around[2];
+    if (points[i].speed - median > Math.max(4, median * 0.5)) out[i] = median;
+  }
+  return out;
+}
+
 /** Скользящее среднее по окну времени ±halfMs вокруг каждой точки. */
-function smooth(points: TrackPoint[], pick: (p: TrackPoint) => number, halfMs: number): number[] {
+function smooth(points: TrackPoint[], values: number[], halfMs: number): number[] {
   const n = points.length;
   const out = new Array<number>(n);
   let lo = 0;
@@ -41,10 +60,10 @@ function smooth(points: TrackPoint[], pick: (p: TrackPoint) => number, halfMs: n
     const t = points[i].t;
     while (hi + 1 < n && points[hi + 1].t <= t + halfMs) {
       hi++;
-      sum += pick(points[hi]);
+      sum += values[hi];
     }
     while (points[lo].t < t - halfMs) {
-      sum -= pick(points[lo]);
+      sum -= values[lo];
       lo++;
     }
     out[i] = sum / (hi - lo + 1);
@@ -231,9 +250,14 @@ export function analyze(points: TrackPoint[]): Analysis {
   const n = points.length;
   if (n < 3) return { ...EMPTY_ANALYSIS, alt: points.map((p) => p.alt), speed: points.map((p) => p.speed) };
 
-  const alt = smooth(points, (p) => p.alt, 4000);
-  const speed = smooth(points, (p) => p.speed, 2500);
-  const speedFast = smooth(points, (p) => p.speed, 1000);
+  const clean = despike(points);
+  const alt = smooth(
+    points,
+    points.map((p) => p.alt),
+    4000
+  );
+  const speed = smooth(points, clean, 2500);
+  const speedFast = smooth(points, clean, 1000);
 
   const { legs, dir, extreme } = findLegs(alt);
   const segments: Segment[] = [];

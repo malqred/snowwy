@@ -1,13 +1,13 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CalendarDays, Flag, Route, Timer, TrendingDown, Trophy, Zap } from '@/components/icons';
-import { Card, Chevron, Label, StatGrid, Title } from '@/components/ui';
+import { Card, Chevron, Label, Screen, StatStrip, Title, useOnAccent } from '@/components/ui';
 import { listSessions } from '@/lib/db';
+import { difficultyInfo, favoritePistes } from '@/lib/pistes';
 import { findRecords } from '@/lib/records';
-import { date, dateIso, int, km, kmh, runsWord, seasonOf, seasonTitle, span } from '@/lib/format';
+import { clock, dateIso, dateLong, dateParts, dateShort, daysWord, int, km, kmh, plural, runsWord, seasonOf, seasonTitle, span } from '@/lib/format';
 import type { Session } from '@/lib/types';
 import { space, useTheme } from '@/theme';
 
@@ -29,7 +29,6 @@ function seasonStats(sessions: Session[]) {
   let runs = 0;
   let dist = 0;
   let vertical = 0;
-  let maxSpeed = 0;
   let runTime = 0;
   for (const s of sessions) {
     if (!s.totals) continue;
@@ -37,20 +36,30 @@ function seasonStats(sessions: Session[]) {
     dist += s.totals.distance;
     vertical += s.totals.vertical;
     runTime += s.totals.runTime;
-    if (s.totals.maxSpeed > maxSpeed) maxSpeed = s.totals.maxSpeed;
   }
-  return [
-    { icon: CalendarDays, label: 'Дней', value: `${days}` },
-    { icon: Flag, label: 'Спусков', value: int(runs) },
-    { icon: Route, label: 'Дистанция', value: km(dist), unit: 'км' },
-    { icon: TrendingDown, label: 'Перепад', value: int(vertical), unit: 'м' },
-    { icon: Zap, label: 'Рекорд', value: kmh(maxSpeed), unit: 'км/ч' },
-    { icon: Timer, label: 'На спусках', value: span(runTime) },
-  ];
+  return {
+    days,
+    items: [
+      { label: 'Спусков', value: int(runs) },
+      { label: 'Км', value: km(dist) },
+      { label: 'М вниз', value: int(vertical) },
+      { label: 'На спусках', value: span(runTime) },
+    ],
+  };
 }
+
+/** Короткие подписи рекордов для маленьких плиток */
+const SHORT: Record<string, string> = {
+  longestRun: 'Длина спуска',
+  biggestRunVertical: 'Перепад за спуск',
+  runs: 'Спусков за день',
+  distance: 'Путь за день',
+  vertical: 'Перепад за день',
+};
 
 export default function HistoryScreen() {
   const t = useTheme();
+  const onAccent = useOnAccent();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[] | null>(null);
@@ -58,9 +67,13 @@ export default function HistoryScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      listSessions().then((list) => {
-        if (active) setSessions(list);
-      });
+      listSessions()
+        .then((list) => {
+          if (active) setSessions(list);
+        })
+        .catch(() => {
+          if (active) setSessions([]);
+        });
       return () => {
         active = false;
       };
@@ -69,12 +82,14 @@ export default function HistoryScreen() {
 
   const seasons = groupBySeason(sessions ?? []);
   const records = findRecords(sessions ?? []);
+  // Главный рекорд — скорость; он один на экране выделен цветом
+  const main = records.find((r) => r.key === 'maxSpeed');
+  const rest = records.filter((r) => r !== main);
+  const open = (id: number) => router.push(`/session/${id}`);
+  const favorites = favoritePistes((sessions ?? []).map((s) => s.pistes ?? []));
 
   return (
-    <ScrollView
-      style={{ backgroundColor: t.bg }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + space.l }]}
-      showsVerticalScrollIndicator={false}>
+    <Screen contentContainerStyle={[styles.content, { paddingTop: insets.top + space.l }]}>
       <Title>История</Title>
 
       {sessions && sessions.length === 0 ? (
@@ -87,71 +102,122 @@ export default function HistoryScreen() {
       ) : null}
 
       {records.length > 0 ? (
-        <View style={styles.list}>
-          <Label icon={Trophy}>Личные рекорды</Label>
-          <Card>
-            {records.map((r, i) => (
+        <View style={styles.block}>
+          <Text style={[styles.sectionTitle, styles.recordsTitle, { color: t.text }]}>Рекорды</Text>
+          {main ? (
+            <Pressable
+              onPress={() => open(main.sessionId)}
+              accessibilityRole="button"
+              style={({ pressed }) => pressed && { opacity: 0.7 }}>
+              <Card accent style={styles.hero}>
+                <View style={styles.heroBody}>
+                  <Label color={onAccent}>Скорость</Label>
+                  <Text style={[styles.heroValue, { color: onAccent }]} numberOfLines={1} adjustsFontSizeToFit>
+                    {main.value}
+                    <Text style={styles.heroUnit}> {main.unit}</Text>
+                  </Text>
+                </View>
+                <Text style={[styles.heroDate, { color: onAccent }]}>{dateLong(main.startedAt)}</Text>
+              </Card>
+            </Pressable>
+          ) : null}
+          <View style={styles.records}>
+            {rest.map((r) => (
               <Pressable
                 key={r.key}
-                onPress={() => router.push(`/session/${r.sessionId}`)}
+                onPress={() => open(r.sessionId)}
                 accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.row,
-                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line },
-                  pressed && { opacity: 0.6 },
-                ]}>
-                <View style={styles.rowBody}>
-                  <Text style={[styles.rowTitle, { color: t.text }]}>{r.label}</Text>
-                  <Text style={[styles.rowSub, { color: t.sub }]}>{date(r.startedAt)}</Text>
-                </View>
-                <Text style={[styles.recordValue, { color: t.text }]}>
-                  {r.value}
-                  {r.unit ? <Text style={[styles.rowSub, { color: t.sub }]}> {r.unit}</Text> : null}
-                </Text>
-                <Chevron />
+                accessibilityLabel={r.label}
+                style={({ pressed }) => [styles.record, pressed && { opacity: 0.6 }]}>
+                <Card quiet style={styles.recordTile}>
+                  <Text style={[styles.recordLabel, { color: t.sub }]} numberOfLines={1} adjustsFontSizeToFit>
+                    {SHORT[r.key] ?? r.label}
+                  </Text>
+                  <Text style={[styles.recordValue, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                    {r.value}
+                    {r.unit ? <Text style={[styles.recordUnit, { color: t.sub }]}> {r.unit}</Text> : null}
+                  </Text>
+                  <Text style={[styles.recordDate, { color: t.sub }]} numberOfLines={1}>
+                    {dateShort(r.startedAt)}
+                  </Text>
+                </Card>
               </Pressable>
             ))}
-          </Card>
+          </View>
         </View>
       ) : null}
 
-      {seasons.map((season) => (
-        <View key={season.year} style={styles.season}>
-          <Text style={[styles.seasonTitle, { color: t.text }]}>{seasonTitle(season.year)}</Text>
-          <StatGrid columns={3} items={seasonStats(season.sessions)} />
-
-          <View style={styles.list}>
-            <Label icon={CalendarDays}>Дни катания</Label>
-            <Card>
-              {season.sessions.map((s, i) => (
-                <Pressable
-                  key={s.id}
-                  onPress={() => router.push(`/session/${s.id}`)}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [
-                    styles.row,
-                    i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line },
-                    pressed && { opacity: 0.6 },
-                  ]}>
-                  <View style={styles.rowBody}>
-                    <Text style={[styles.rowTitle, { color: t.text }]}>{date(s.startedAt)}</Text>
-                    <Text style={[styles.rowSub, { color: t.sub }]}>
-                      {s.totals
-                        ? `${s.totals.runs} ${runsWord(s.totals.runs)} · ${km(s.totals.distance)} км · ${int(s.totals.vertical)} м`
-                        : 'Нет данных'}
-                    </Text>
-                  </View>
-                  <Text style={[styles.rowSub, { color: t.sub }]}>
-                    {span(((s.endedAt ?? s.startedAt) - s.startedAt) / 1000)}
-                  </Text>
-                  <Chevron />
-                </Pressable>
-              ))}
+      {favorites.length > 0 ? (
+        <View style={styles.block}>
+          <Text style={[styles.sectionTitle, styles.recordsTitle, { color: t.text }]}>Любимые трассы</Text>
+          {favorites.map((f) => (
+            <Card key={f.name} style={styles.day}>
+              <View style={[styles.pisteDot, { backgroundColor: difficultyInfo(f.difficulty).color }]} />
+              <View style={styles.dayBody}>
+                <Text style={[styles.dayTitle, { color: t.text }]} numberOfLines={1}>
+                  {f.name}
+                </Text>
+                <Text style={[styles.daySub, { color: t.sub }]} numberOfLines={1}>
+                  лучшее время {clock(f.best)} · средняя {kmh(f.avgSpeed)} км/ч
+                </Text>
+              </View>
+              <Text style={[styles.favCount, { color: t.text }]}>
+                {f.count}
+                <Text style={[styles.daySub, { color: t.sub }]}> {plural(f.count, 'раз', 'раза', 'раз')}</Text>
+              </Text>
             </Card>
-          </View>
+          ))}
         </View>
-      ))}
-    </ScrollView>
+      ) : null}
+
+      {seasons.map((season) => {
+        const stats = seasonStats(season.sessions);
+        return (
+          <View key={season.year} style={styles.season}>
+            <View style={styles.sectionHead}>
+              <Text style={[styles.sectionTitle, { color: t.text }]}>{seasonTitle(season.year)}</Text>
+              <Text style={[styles.sectionNote, { color: t.sub }]}>
+                {stats.days} {daysWord(stats.days)}
+              </Text>
+            </View>
+            <StatStrip items={stats.items} />
+
+            <Text style={[styles.sectionTitle, styles.daysTitle, { color: t.text }]}>Дни катания</Text>
+            <View style={styles.block}>
+              {season.sessions.map((s) => {
+                const d = dateParts(s.startedAt);
+                return (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => open(s.id)}
+                    accessibilityRole="button"
+                    style={({ pressed }) => pressed && { opacity: 0.6 }}>
+                    <Card style={styles.day}>
+                      <View style={[styles.date, { backgroundColor: t.accent }]}>
+                        <Text style={[styles.dateDay, { color: t.inverse }]}>{d.day}</Text>
+                        <Text style={[styles.dateMonth, { color: t.inverse }]}>{d.month}</Text>
+                      </View>
+                      <View style={styles.dayBody}>
+                        <Text style={[styles.dayTitle, { color: t.text }]}>{d.weekday}</Text>
+                        <Text style={[styles.daySub, { color: t.sub }]} numberOfLines={1}>
+                          {s.totals
+                            ? `${s.totals.runs} ${runsWord(s.totals.runs)} · ${km(s.totals.distance)} км · ${int(s.totals.vertical)} м`
+                            : 'Нет данных'}
+                        </Text>
+                      </View>
+                      <Text style={[styles.daySub, { color: t.sub }]}>
+                        {span(((s.endedAt ?? s.startedAt) - s.startedAt) / 1000)}
+                      </Text>
+                      <Chevron />
+                    </Card>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        );
+      })}
+    </Screen>
   );
 }
 
@@ -160,19 +226,32 @@ const styles = StyleSheet.create({
   empty: { paddingTop: 96, alignItems: 'center', gap: space.s },
   emptyTitle: { fontSize: 20, fontWeight: '600' },
   emptyText: { fontSize: 15, lineHeight: 21, textAlign: 'center' },
-  season: { gap: space.m },
-  seasonTitle: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
-  list: { gap: space.s },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: space.m,
-    paddingVertical: 14,
-    gap: 10,
-    minHeight: 64,
-  },
-  rowBody: { flex: 1, gap: 3 },
-  rowTitle: { fontSize: 17, fontWeight: '600' },
-  rowSub: { fontSize: 13, fontVariant: ['tabular-nums'] },
-  recordValue: { fontSize: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  block: { gap: 8 },
+  hero: { flexDirection: 'row', alignItems: 'flex-end', padding: 18, gap: 12, borderRadius: 22 },
+  heroBody: { flex: 1, gap: 6 },
+  heroValue: { fontSize: 60, fontWeight: '800', letterSpacing: -3, lineHeight: 62, fontVariant: ['tabular-nums'] },
+  heroUnit: { fontSize: 17, fontWeight: '600', letterSpacing: 0 },
+  heroDate: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  records: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  record: { flexBasis: '30%', flexGrow: 1 },
+  recordTile: { paddingHorizontal: 12, paddingVertical: 10, gap: 3, borderRadius: 16 },
+  recordLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
+  recordValue: { fontSize: 20, fontWeight: '700', letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  recordDate: { fontSize: 11, fontVariant: ['tabular-nums'] },
+  recordsTitle: { paddingHorizontal: 4, marginBottom: 2 },
+  recordUnit: { fontSize: 12, fontWeight: '500', letterSpacing: 0 },
+  season: { gap: 10 },
+  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 4 },
+  sectionTitle: { fontSize: 20, fontWeight: '700', letterSpacing: -0.3 },
+  sectionNote: { fontSize: 13, fontVariant: ['tabular-nums'] },
+  daysTitle: { paddingHorizontal: 4, marginTop: 10 },
+  day: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 12 },
+  date: { width: 48, height: 48, borderRadius: 14, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
+  dateDay: { fontSize: 19, fontWeight: '800', lineHeight: 20, fontVariant: ['tabular-nums'] },
+  dateMonth: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  pisteDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', marginHorizontal: 4 },
+  favCount: { fontSize: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  dayBody: { flex: 1, gap: 2 },
+  dayTitle: { fontSize: 17, fontWeight: '600' },
+  daySub: { fontSize: 13, fontVariant: ['tabular-nums'] },
 });
