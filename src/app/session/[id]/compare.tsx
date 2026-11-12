@@ -161,6 +161,7 @@ function Compare({
         secondSpan={pb.length / longest}
         duration={0}
         axis={axis}
+        at={(f) => meters(f * longest)}
         format={(v) => num(v)}
         unit="км/ч"
         fromZero
@@ -173,6 +174,7 @@ function Compare({
         secondSpan={pb.length / longest}
         duration={0}
         axis={axis}
+        at={(f) => meters(f * longest)}
         format={(v) => int(v)}
         unit="м"
         fromZero
