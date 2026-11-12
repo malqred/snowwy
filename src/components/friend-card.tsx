@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,12 +29,15 @@ type Props = {
   onClose: () => void;
   /** Текущее время, мс: по нему понятно, сегодняшние ли итоги */
   now: number;
+  /** Файлы аватарки и баннера; '' — нет */
+  avatar?: string;
+  banner?: string;
 };
 
 const firstLetter = (name: string) => (Array.from(name.trim())[0] ?? '?').toUpperCase();
 
 /** Карточка участника группы: итоги дня, рекорды, где он и сколько заряда. */
-export function FriendCard({ member, color, status, age, where, onShowOnMap, onClose, now }: Props) {
+export function FriendCard({ member, color, status, age, where, onShowOnMap, onClose, now, avatar = '', banner = '' }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   if (!member) return null;
@@ -64,11 +68,19 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={styles.shade} onPress={onClose} accessibilityLabel="Закрыть карточку" />
       <View style={[styles.sheet, { backgroundColor: t.bg, borderColor: t.line, paddingBottom: insets.bottom + space.m }]}>
-        <View style={[styles.grip, { backgroundColor: t.line }]} />
+        {banner ? (
+          <Image source={{ uri: banner }} style={styles.banner} contentFit="cover" transition={150} />
+        ) : (
+          <View style={[styles.grip, { backgroundColor: t.line }]} />
+        )}
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <View style={styles.head}>
-            <View style={[styles.avatar, { backgroundColor: color }]}>
-              <Text style={styles.avatarText}>{firstLetter(member.name)}</Text>
+          <View style={[styles.head, banner ? styles.headOnBanner : null]}>
+            <View style={[styles.avatar, { backgroundColor: color }, banner ? [styles.avatarOnBanner, { borderColor: t.bg }] : null]}>
+              {avatar ? (
+                <Image source={{ uri: avatar }} style={styles.avatarImage} contentFit="cover" transition={150} />
+              ) : (
+                <Text style={styles.avatarText}>{firstLetter(member.name)}</Text>
+              )}
             </View>
             <View style={styles.flex}>
               <Text style={[styles.name, { color: t.text }]} numberOfLines={1}>
@@ -179,12 +191,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: 0,
     paddingTop: 10,
+    overflow: 'hidden',
   },
+  banner: { height: 120, marginTop: -10, marginBottom: space.s },
+  headOnBanner: { marginTop: -46, alignItems: 'flex-end' },
+  avatarOnBanner: { width: 72, height: 72, borderRadius: 36, borderWidth: 4 },
+  avatarImage: { width: '100%', height: '100%' },
   grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: space.s },
   body: { paddingHorizontal: space.m, gap: space.l, paddingBottom: space.s },
   head: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   flex: { flex: 1 },
-  avatar: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarText: { color: '#FFFFFF', fontSize: 22, fontWeight: '700' },
   name: { fontSize: 22, fontWeight: '700' },
   sub: { fontSize: 14, marginTop: 2 },

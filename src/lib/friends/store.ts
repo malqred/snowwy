@@ -1,14 +1,17 @@
 // Группа друзей: кто в ней, где они сейчас и отправка своей точки во время катания.
+import { Directory, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
+import Storage from 'expo-sqlite/kv-store';
 import { useSyncExternalStore } from 'react';
 
 import { time } from '../format';
 import { cancelNotify, notifyLater, notifyNow } from '../notify';
 import { CATEGORIES, type AchievementLevels } from '../achievements';
+import { groupImage, imagesKey, type ImageKind } from '../profile';
 import { getSettings, updateSettings } from '../settings';
 import { ApiError, call } from './api';
 import { ensureServer } from './cloudflare';
-import { inviteLink, type Invite } from './codec';
+import { fromBase64, inviteLink, type Invite } from './codec';
 import { randomId, randomKey, randomSecret, seal, unseal } from './crypto';
 
 /** Как часто отправлять свою точку и обновлять чужие, мс */
@@ -113,7 +116,12 @@ export type Member = {
   info: FriendInfo | null;
   /** Когда сводка обновлялась (время сервера, мс) */
   infoAt: number;
+  /** Когда человек последний раз менял аватарку или баннер (время сервера, мс); 0 — не ставил */
+  picAt: number;
 };
+
+/** Аватарка и баннер друга: файлы на этом телефоне; '' — нет картинки */
+export type FriendPics = { avatar: string; banner: string; picAt: number };
 
 export type FriendsState = {
   /** Моё имя для группы */
@@ -129,8 +137,10 @@ export type FriendsState = {
   /** Разовое сообщение: исключили из группы, группу удалили */
   notice: string | null;
   meet: Meet | null;
-  /** Версия сервера группы: 1 — без сводок и точек встречи */
+  /** Версия сервера группы: 1 — без сводок и точек встречи, 2 — без картинок */
   serverVersion: number;
+  /** Аватарки и баннеры друзей по номеру участника */
+  pics: Record<string, FriendPics>;
 };
 
 /** Какую точку встречи телефон уже видел и какие напоминания о ней поставил */
@@ -141,8 +151,23 @@ type ListReply = {
   now: number;
   owner: string;
   meet?: { blob: string; at: number; by: string } | null;
-  members: { id: string; name: string; pos: string; at: number; info?: string; infoAt?: number }[];
+  members: { id: string; name: string; pos: string; at: number; info?: string; infoAt?: number; picAt?: number }[];
 };
+
+const PICS_KEY = 'friends.pics';
+/** Какие свои картинки уже отправлены группе: «группа:ключ картинок» */
+const PICS_SENT_KEY = 'friends.picsSent';
+const PICS_DIR = 'friends-pics';
+
+function loadPics(): Record<string, FriendPics> {
+  try {
+    const raw = Storage.getItemSync(PICS_KEY);
+    if (raw) return JSON.parse(raw) as Record<string, FriendPics>;
+  } catch {
+    // картинок ещё нет
+  }
+  return {};
+}
 
 function load(): Saved {
   try {
@@ -165,6 +190,7 @@ let state: FriendsState = {
   notice: null,
   meet: null,
   serverVersion: 2,
+  pics: loadPics(),
 };
 let meetSeen: MeetSeen = saved.meetSeen ?? { id: 0, notes: [] };
 const listeners = new Set<() => void>();
@@ -183,6 +209,127 @@ const nameScope = (gid: string, id: string) => `${gid}:${id}:name`;
 const posScope = (gid: string, id: string) => `${gid}:${id}:pos`;
 const infoScope = (gid: string, id: string) => `${gid}:${id}:info`;
 const meetScope = (gid: string) => `${gid}:meet`;
+const picScope = (gid: string, id: string, kind: ImageKind) => `${gid}:${id}:${kind}`;
+
+/** Самая длинная зашифрованная картинка, которую примет сервер, символов */
+const MAX_PIC = 88000;
+let picsBusy = false;
+
+/** Удаляет файл картинки, если он есть. */
+function dropFile(uri: string) {
+  if (!uri) return;
+  try {
+    const f = new File(uri);
+    if (f.exists) f.delete();
+  } catch {
+    // файла уже нет
+  }
+}
+
+/** Кладёт картинку друга в папку приложения и возвращает адрес файла. */
+async function savePic(id: string, kind: ImageKind, picAt: number, base64: string): Promise<string> {
+  const dir = new Directory(Paths.document, PICS_DIR);
+  if (!dir.exists) dir.create();
+  const file = new File(dir, `${id}-${kind}-${picAt}.jpg`);
+  if (file.exists) file.delete();
+  file.create();
+  await file.write(fromBase64(base64));
+  return file.uri;
+}
+
+/** Шифрует картинку; если она слишком большая для сервера — пересжимает сильнее. */
+async function sealPic(group: Group, kind: ImageKind): Promise<string> {
+  for (const quality of [0.7, 0.5, 0.35]) {
+    const data = await groupImage(kind, quality);
+    if (!data) return '';
+    const blob = await seal(group.key, picScope(group.gid, group.id, kind), { d: data });
+    if (blob.length <= MAX_PIC) return blob;
+  }
+  return '';
+}
+
+/**
+ * Свои аватарка и баннер — группе (когда сменились), картинки друзей — себе (когда сменились у них).
+ * Идёт отдельно от обычного обмена: картинки большие, и обмен местом не должен их ждать.
+ */
+async function syncPics(group: Group, reply: ListReply) {
+  if ((reply.v ?? 1) < 3 || picsBusy) return;
+  picsBusy = true;
+  try {
+    const key = `${group.gid}:${imagesKey()}`;
+    let sent = '';
+    try {
+      sent = Storage.getItemSync(PICS_SENT_KEY) ?? '';
+    } catch {
+      // ещё не отправляли
+    }
+    if (sent !== key) {
+      const avatar = await sealPic(group, 'avatar');
+      const banner = await sealPic(group, 'banner');
+      await call(group.url, { op: 'pic', gid: group.gid, id: group.id, token: group.token, avatar, banner }, 1, 30000);
+      await Storage.setItem(PICS_SENT_KEY, key);
+    }
+
+    const pics = { ...state.pics };
+    let changed = false;
+    const want: string[] = [];
+    for (const m of reply.members) {
+      if (m.id === group.id) continue;
+      const at = m.picAt ?? 0;
+      const have = pics[m.id];
+      if (at === 0) {
+        if (have) {
+          dropFile(have.avatar);
+          dropFile(have.banner);
+          delete pics[m.id];
+          changed = true;
+        }
+      } else if (!have || have.picAt !== at) {
+        want.push(m.id);
+      }
+    }
+    // Ушедших из группы забываем
+    for (const id of Object.keys(pics)) {
+      if (!reply.members.some((m) => m.id === id)) {
+        dropFile(pics[id].avatar);
+        dropFile(pics[id].banner);
+        delete pics[id];
+        changed = true;
+      }
+    }
+    if (want.length > 0) {
+      const res = await call<{ pics: { id: string; avatar: string; banner: string; picAt: number }[] }>(
+        group.url,
+        { op: 'pics', gid: group.gid, id: group.id, token: group.token, ids: want },
+        1,
+        30000
+      );
+      for (const p of res.pics) {
+        const old = pics[p.id];
+        const read = async (kind: ImageKind, blob: string) => {
+          if (!blob) return '';
+          const value = await unseal<{ d?: unknown }>(group.key, picScope(group.gid, p.id, kind), blob);
+          return typeof value?.d === 'string' ? await savePic(p.id, kind, p.picAt, value.d) : '';
+        };
+        const next = { avatar: await read('avatar', p.avatar), banner: await read('banner', p.banner), picAt: p.picAt };
+        if (old) {
+          if (old.avatar !== next.avatar) dropFile(old.avatar);
+          if (old.banner !== next.banner) dropFile(old.banner);
+        }
+        pics[p.id] = next;
+        changed = true;
+      }
+    }
+    if (changed && state.group?.gid === group.gid) {
+      set({ pics });
+      Storage.setItem(PICS_KEY, JSON.stringify(pics)).catch(() => {});
+    }
+  } catch {
+    // не получилось — попробуем при следующем обмене
+  } finally {
+    picsBusy = false;
+  }
+}
 
 const num = (v: unknown): number => (typeof v === 'number' && isFinite(v) ? v : 0);
 
@@ -283,6 +430,7 @@ async function apply(group: Group, reply: ListReply) {
         at: m.at,
         info,
         infoAt: m.infoAt ?? 0,
+        picAt: m.picAt ?? 0,
       };
     })
   );
@@ -306,6 +454,7 @@ async function apply(group: Group, reply: ListReply) {
   if (state.group?.gid !== group.gid) return;
   set({ members, meet, serverVersion: reply.v ?? 1, syncedAt: Date.now(), skew: reply.now - Date.now(), error: null });
   noticeMeet(meet).catch(() => {});
+  syncPics(group, reply);
 }
 
 /** Самое длинное описание точки встречи, символов */
@@ -347,7 +496,13 @@ function drop(notice: string | null) {
   infoSentAt = 0;
   meetSeen.notes.forEach((n) => cancelNotify(n));
   meetSeen = { id: 0, notes: [] };
-  set({ group: null, members: [], meet: null, syncedAt: 0, error: null, notice });
+  for (const p of Object.values(state.pics)) {
+    dropFile(p.avatar);
+    dropFile(p.banner);
+  }
+  Storage.removeItem(PICS_KEY).catch(() => {});
+  Storage.removeItem(PICS_SENT_KEY).catch(() => {});
+  set({ group: null, members: [], meet: null, pics: {}, syncedAt: 0, error: null, notice });
   persist();
 }
 

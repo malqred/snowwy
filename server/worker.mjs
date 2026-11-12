@@ -9,10 +9,16 @@
  * Приложение само размещает этот файл в аккаунте создателя группы.
  * После правки запустите `node scripts/embed-worker.mjs` и увеличьте VERSION.
  */
-const VERSION = 2;
+const VERSION = 3;
 
 /** Самое длинное тело запроса, байт */
 const MAX_BODY = 4096;
+/** Запрос с аватаркой и баннером длиннее остальных, байт */
+const MAX_PIC_BODY = 200000;
+/** Самая длинная зашифрованная картинка, символов: аватарка 128×128 и баннер 600×200 в JPEG */
+const MAX_PIC = 90000;
+/** Сколько участников можно запросить за раз */
+const MAX_PIC_IDS = 50;
 /** Самая длинная зашифрованная запись (имя, точка, сводка, точка встречи), символов */
 const MAX_BLOB = 1400;
 const MAX_MEMBERS = 50;
@@ -29,6 +35,7 @@ const BLOB = /^[A-Za-z0-9_+/=-]*$/;
 const isId = (v) => typeof v === 'string' && ID.test(v);
 const isSecret = (v) => typeof v === 'string' && SECRET.test(v);
 const isBlob = (v) => typeof v === 'string' && v.length > 0 && v.length <= MAX_BLOB && BLOB.test(v);
+const isPic = (v) => typeof v === 'string' && v.length <= MAX_PIC && BLOB.test(v);
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -55,6 +62,10 @@ const ADDED = [
   ['grp', 'meet', "TEXT NOT NULL DEFAULT ''"],
   ['grp', 'meetAt', 'INTEGER NOT NULL DEFAULT 0'],
   ['grp', 'meetBy', "TEXT NOT NULL DEFAULT ''"],
+  // Третья версия: аватарка и баннер. Отдаются отдельно, по запросу: в обычном обмене только время смены
+  ['member', 'avatar', "TEXT NOT NULL DEFAULT ''"],
+  ['member', 'banner', "TEXT NOT NULL DEFAULT ''"],
+  ['member', 'picAt', 'INTEGER NOT NULL DEFAULT 0'],
 ];
 
 /** Таблицы создаются при первом запросе, недостающие столбцы добавляются. */
@@ -81,7 +92,7 @@ async function prepare(db) {
 /** Ответ со списком участников группы и точкой встречи. */
 async function list(db, gid, owner, now) {
   const { results } = await db
-    .prepare('SELECT id, name, pos, at, info, infoAt FROM member WHERE gid = ? ORDER BY joined, id')
+    .prepare('SELECT id, name, pos, at, info, infoAt, picAt FROM member WHERE gid = ? ORDER BY joined, id')
     .bind(gid)
     .all();
   const g = await db.prepare('SELECT meet, meetAt, meetBy FROM grp WHERE id = ?').bind(gid).first();
@@ -97,6 +108,7 @@ async function list(db, gid, owner, now) {
       at: m.at,
       info: m.infoAt > now - INFO_TTL ? m.info : '',
       infoAt: m.infoAt,
+      picAt: m.picAt,
     })),
   });
 }
@@ -128,7 +140,7 @@ async function handle(request, env) {
   if (request.method !== 'POST') return fail('method', 405);
 
   const text = await request.text();
-  if (text.length > MAX_BODY) return fail('size', 413);
+  if (text.length > MAX_PIC_BODY) return fail('size', 413);
   let b;
   try {
     b = JSON.parse(text);
@@ -136,6 +148,8 @@ async function handle(request, env) {
     return fail('bad', 400);
   }
   if (!b || typeof b !== 'object') return fail('bad', 400);
+  // Длинным может быть только запрос с картинками
+  if (b.op !== 'pic' && text.length > MAX_BODY) return fail('size', 413);
 
   const db = env.DB;
   await prepare(db);
@@ -200,6 +214,33 @@ async function handle(request, env) {
         await db.prepare('UPDATE member SET info = ?, infoAt = ? WHERE gid = ? AND id = ?').bind(b.info, now, b.gid, b.id).run();
       }
       return list(db, b.gid, who.owner, now);
+    }
+
+    // Сменить свои аватарку и баннер (зашифрованные картинки; '' — убрать)
+    case 'pic': {
+      const who = await member(db, b);
+      if (who.error) return who.error;
+      if (!isPic(b.avatar ?? '') || !isPic(b.banner ?? '')) return fail('bad', 400);
+      await db
+        .prepare('UPDATE member SET avatar = ?, banner = ?, picAt = ? WHERE gid = ? AND id = ?')
+        .bind(b.avatar ?? '', b.banner ?? '', now, b.gid, b.id)
+        .run();
+      return json({ ok: true, picAt: now });
+    }
+
+    // Картинки нескольких участников группы
+    case 'pics': {
+      const who = await member(db, b);
+      if (who.error) return who.error;
+      if (!Array.isArray(b.ids) || b.ids.length === 0 || b.ids.length > MAX_PIC_IDS || !b.ids.every(isId)) {
+        return fail('bad', 400);
+      }
+      const marks = b.ids.map(() => '?').join(', ');
+      const { results } = await db
+        .prepare(`SELECT id, avatar, banner, picAt FROM member WHERE gid = ? AND id IN (${marks})`)
+        .bind(b.gid, ...b.ids)
+        .all();
+      return json({ pics: results.map((m) => ({ id: m.id, avatar: m.avatar, banner: m.banner, picAt: m.picAt })) });
     }
 
     // Назначить точку встречи (meet — зашифрованная запись) или отменить её (meet = '').

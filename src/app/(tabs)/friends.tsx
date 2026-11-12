@@ -393,8 +393,12 @@ export default function FriendsScreen() {
                 <MapPin size={18} color={t.text} strokeWidth={ICON_STROKE} />
               </Pressable>
               <View style={[styles.avatar, { backgroundColor: color, opacity: m.pos && age <= STALE ? 1 : 0.45 }]}>
-                {m.me && myImages.avatar ? (
-                  <Image source={{ uri: myImages.avatar }} style={styles.avatarImage} contentFit="cover" />
+                {(m.me ? myImages.avatar : friends.pics[m.id]?.avatar) ? (
+                  <Image
+                    source={{ uri: m.me ? myImages.avatar : friends.pics[m.id]?.avatar }}
+                    style={styles.avatarImage}
+                    contentFit="cover"
+                  />
                 ) : (
                   <Text style={styles.avatarText}>{letter(m.name)}</Text>
                 )}
@@ -462,6 +466,8 @@ export default function FriendsScreen() {
           onShowOnMap={openedRow.m.pos ? () => showOnMap(openedRow.m) : null}
           onClose={() => setOpened(null)}
           now={now}
+          avatar={openedRow.m.me ? myImages.avatar : (friends.pics[openedRow.m.id]?.avatar ?? '')}
+          banner={openedRow.m.me ? myImages.banner : (friends.pics[openedRow.m.id]?.banner ?? '')}
         />
       ) : null}
       <Prompt

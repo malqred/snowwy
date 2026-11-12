@@ -68,7 +68,8 @@ export default function ProfileScreen() {
 
   const choose = async (kind: ImageKind) => {
     try {
-      await pickImage(kind);
+      // Новые картинки сразу уходят группе
+      if (await pickImage(kind)) pushFriendInfo().catch(() => {});
     } catch {
       Alert.alert('Не получилось', 'Не удалось открыть фото. Проверьте, что у Snowwy есть доступ к галерее.');
     }
@@ -83,14 +84,24 @@ export default function ProfileScreen() {
         { title, options: ['Выбрать другое фото', 'Убрать', 'Отмена'], destructiveButtonIndex: 1, cancelButtonIndex: 2 },
         (i) => {
           if (i === 0) choose(kind);
-          if (i === 1) remove(kind);
+          if (i === 1) {
+            remove(kind);
+            pushFriendInfo().catch(() => {});
+          }
         }
       );
       return;
     }
     Alert.alert(title, undefined, [
       { text: 'Отмена', style: 'cancel' },
-      { text: 'Убрать', style: 'destructive', onPress: () => remove(kind) },
+      {
+        text: 'Убрать',
+        style: 'destructive',
+        onPress: () => {
+          remove(kind);
+          pushFriendInfo().catch(() => {});
+        },
+      },
       { text: 'Другое фото', onPress: () => choose(kind) },
     ]);
   };

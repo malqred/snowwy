@@ -60,7 +60,7 @@ async function group(call) {
 
 test('посредник отвечает на проверку связи', async () => {
   const res = await worker.fetch(new Request('https://example.workers.dev/'), { DB: fakeD1(), OWNER_KEY });
-  assert.deepEqual(await res.json(), { ok: true, snowwy: 2 });
+  assert.deepEqual(await res.json(), { ok: true, snowwy: 3 });
 });
 
 test('группу создаёт только владелец аккаунта', async () => {
@@ -204,7 +204,7 @@ test('сводка участника и точка встречи', async () =>
 
   const synced = await call({ op: 'sync', gid: GID, ...person(2), info: 'c3VtbWFyeQ' });
   assert.equal(synced.status, 200);
-  assert.equal(synced.body.v, 2);
+  assert.equal(synced.body.v, 3);
   assert.equal(synced.body.members.find((m) => m.id === person(2).id).info, 'c3VtbWFyeQ');
 
   // Встречу назначает участник, остальные видят её при следующем обмене
@@ -222,6 +222,31 @@ test('сводка участника и точка встречи', async () =>
   assert.equal(cancelled.body.meet, null);
 
   assert.equal((await call({ op: 'meet', gid: GID, ...person(2), meet: 'bad blob!' })).status, 400);
+});
+
+test('аватарки и баннеры: время смены в обмене, сами картинки — по запросу', async () => {
+  const { call } = server();
+  await group(call);
+  await call({ op: 'join', gid: GID, invite: INVITE, ...person(2) });
+
+  const avatar = 'YXZhdGFy'.repeat(1000);
+  const saved = await call({ op: 'pic', gid: GID, ...person(2), avatar, banner: '' });
+  assert.equal(saved.status, 200);
+
+  const list = await call({ op: 'sync', gid: GID, ...person(1) });
+  const two = list.body.members.find((m) => m.id === person(2).id);
+  assert.equal(two.picAt, saved.body.picAt);
+  assert.equal(two.avatar, undefined, 'картинки не ходят в обычном обмене');
+
+  const pics = await call({ op: 'pics', gid: GID, ...person(1), ids: [person(2).id] });
+  assert.equal(pics.body.pics[0].avatar, avatar);
+  assert.equal(pics.body.pics[0].banner, '');
+
+  // Слишком большая картинка и чужой токен не проходят
+  assert.equal((await call({ op: 'pic', gid: GID, ...person(2), avatar: 'x'.repeat(90001) })).status, 400);
+  assert.equal((await call({ op: 'pics', gid: GID, id: person(1).id, token: 'wrong-token-0123456789', ids: [person(2).id] })).status, 403);
+  // Длинный запрос другого вида по-прежнему отклоняется
+  assert.equal((await call({ op: 'sync', gid: GID, ...person(1), pad: 'x'.repeat(6000) })).status, 413);
 });
 
 test('посредник первой версии получает новые столбцы, данные сохраняются', async () => {
