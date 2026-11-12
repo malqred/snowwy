@@ -203,7 +203,10 @@ export function bindRideActions(onAction: (action: RideAction) => void, refresh:
       else if (button === 'stop') ask(true);
       else if (button === 'stop-no') ask(false);
       else {
-        ask(false);
+        // Без перерисовки: уведомление всё равно сейчас уберётся
+        confirming = false;
+        if (confirmTimer) clearTimeout(confirmTimer);
+        confirmTimer = null;
         onAction('stop');
       }
     });

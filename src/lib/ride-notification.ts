@@ -95,18 +95,34 @@ async function post(title: string, body: string, mode: Mode) {
   }
 }
 
+/** Через сколько после показа пробовать объединить уведомления, мс: система выкладывает их не сразу */
+const MERGE_TRIES = [0, 250, 800, 2000];
+
 function merge() {
-  try {
-    SnowwyPower?.mergeRideNotification(RIDE_NOTIFICATION);
-  } catch {
-    // не вышло — останутся два уведомления, на запись это не влияет
+  for (const delay of MERGE_TRIES) {
+    setTimeout(() => {
+      if (!visible) return;
+      try {
+        SnowwyPower?.mergeRideNotification(RIDE_NOTIFICATION);
+      } catch {
+        // не вышло — останутся два уведомления, на запись это не влияет
+      }
+    }, delay);
   }
 }
 
 export function hideRideNotification(): Promise<void> {
   if (Platform.OS !== 'android') return Promise.resolve();
   visible = false;
-  queue = queue.then(() => Notifications.dismissNotificationAsync(RIDE_NOTIFICATION).catch(() => {}));
+  const dismiss = () => Notifications.dismissNotificationAsync(RIDE_NOTIFICATION).catch(() => {});
+  queue = queue.then(dismiss);
+  // Система выкладывает уведомление с задержкой: обновление, отправленное перед самым
+  // завершением, может появиться уже после скрытия. Убираем ещё раз чуть позже.
+  for (const delay of [500, 2000]) {
+    setTimeout(() => {
+      if (!visible) dismiss();
+    }, delay);
+  }
   return queue;
 }
 
