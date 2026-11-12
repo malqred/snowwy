@@ -1,6 +1,17 @@
 import { Image } from 'expo-image';
-import { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  Dimensions,
+  Modal,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dayKey } from '@/lib/friends/info';
@@ -40,6 +51,56 @@ type Props = {
   own?: { info: FriendInfo | null | 'loading'; hidden: boolean };
 };
 
+/**
+ * Смахивание карточки вниз: она едет за пальцем и закрывается, если её утянули достаточно далеко.
+ * Верхняя полоса с ручкой (над баннером) ловит жест всегда; остальная карточка —
+ * когда список прокручен к самому верху и тянут вниз (иначе список прокручивается как обычно).
+ */
+function makeSwipe() {
+  const drag = new Animated.Value(0);
+  const state = { top: true, close: () => {} };
+  const back = () => Animated.spring(drag, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+  const handlers = {
+    onPanResponderMove: (_: unknown, g: { dy: number }) => drag.setValue(Math.max(0, g.dy)),
+    onPanResponderRelease: (_: unknown, g: { dy: number; vy: number }) => {
+      if (g.dy > 120 || g.vy > 0.9) {
+        Animated.timing(drag, { toValue: Dimensions.get('window').height, duration: 180, useNativeDriver: true }).start(() =>
+          state.close()
+        );
+      } else back();
+    },
+    onPanResponderTerminate: back,
+    onPanResponderTerminationRequest: () => false,
+  };
+  // Ручка: тянется сразу, с первого касания
+  const handle = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    ...handlers,
+  });
+  // Карточка целиком: у верха списка жест вниз тянет её, жест вверх отдаётся прокрутке
+  const pan = PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_, g) => {
+      return state.top && g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.2;
+    },
+    onMoveShouldSetPanResponder: (_, g) => state.top && g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.2,
+    ...handlers,
+    onPanResponderTerminationRequest: () => true,
+  });
+
+  return {
+    drag,
+    pan,
+    handle,
+    setTop: (top: boolean) => {
+      state.top = top;
+    },
+    setClose: (close: () => void) => {
+      state.close = close;
+    },
+  };
+}
+
 const firstLetter = (name: string) => (Array.from(name.trim())[0] ?? '?').toUpperCase();
 
 /** Карточка участника группы: итоги дня, рекорды, где он и сколько заряда. */
@@ -47,6 +108,18 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const [allBadges, setAllBadges] = useState(false);
+
+  // Смахивание вниз: карточка едет за пальцем и закрывается, если её утянули достаточно далеко.
+  // Тянуть можно за любое место, пока список прокручен к самому верху.
+  const [swipe] = useState(makeSwipe);
+  useEffect(() => {
+    swipe.setClose(onClose);
+  }, [swipe, onClose]);
+  const drag = swipe.drag;
+
+  // Затемнение светлеет, пока карточку тянут вниз
+  const shadeOpacity = drag.interpolate({ inputRange: [0, 400], outputRange: [1, 0], extrapolate: 'clamp' });
+
   if (!member) return null;
   const loading = own?.info === 'loading';
   const info = own ? (own.info === 'loading' ? null : own.info) : member.info;
@@ -74,26 +147,37 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.shade} onPress={onClose} accessibilityLabel="Закрыть карточку" />
-      <View
+      {/* Затемнение — на весь экран, под карточкой: у скруглённых углов не остаётся светлых уголков */}
+      <Animated.View style={[StyleSheet.absoluteFill, styles.shade, { opacity: shadeOpacity }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Закрыть карточку" />
+      </Animated.View>
+      <View style={styles.spacer} pointerEvents="box-none" />
+      <Animated.View
+        {...swipe.pan.panHandlers}
         style={[
           styles.sheet,
           // С баннером он сам начинается у края, без полосы фона над ним
           banner ? styles.sheetWithBanner : null,
-          { backgroundColor: t.bg, borderColor: t.line, paddingBottom: insets.bottom + space.m },
+          { backgroundColor: t.bg, paddingBottom: insets.bottom + space.m, transform: [{ translateY: drag }] },
         ]}>
-        {banner ? null : <View style={[styles.grip, { backgroundColor: t.line }]} />}
+        {/* Ручка: полоса во всю ширину сверху, за неё карточку тянут вниз и смахивают */}
+        <View {...swipe.handle.panHandlers} style={[styles.handle, banner ? styles.handleOnBanner : null]}>
+          <View style={[styles.grip, banner ? styles.gripOnBanner : { backgroundColor: t.line }]} />
+        </View>
         {/* Без «резинки» у краёв: иначе при потягивании баннер уезжал и под ним открывался пустой фон */}
         <ScrollView
           contentContainerStyle={styles.body}
           showsVerticalScrollIndicator={false}
           bounces={false}
-          overScrollMode="never">
+          overScrollMode="never"
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            swipe.setTop(e.nativeEvent.contentOffset.y <= 0);
+          }}>
           {/* Баннер внутри прокрутки: аватарка ложится на его край и не обрезается */}
           {banner ? (
             <View style={styles.bannerWrap}>
               <Image source={{ uri: banner }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
-              <View style={[styles.grip, styles.gripOnBanner]} />
             </View>
           ) : null}
           <View style={[styles.head, banner ? styles.headOnBanner : null]}>
@@ -251,29 +335,31 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
             />
           ) : null}
         </ScrollView>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  shade: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  shade: { backgroundColor: 'rgba(0,0,0,0.4)' },
+  spacer: { flex: 1 },
   sheet: {
     maxHeight: '85%',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: 0,
-    paddingTop: 10,
+    borderCurve: 'continuous',
     overflow: 'hidden',
   },
   sheetWithBanner: { paddingTop: 0 },
   bannerWrap: { height: 140, marginHorizontal: -space.m, marginBottom: -space.l },
-  gripOnBanner: { marginTop: 10, backgroundColor: 'rgba(255,255,255,0.8)' },
+  gripOnBanner: { backgroundColor: 'rgba(255,255,255,0.85)' },
+  handle: { height: 40, alignItems: 'center', justifyContent: 'center' },
+  // Над баннером ручка лежит поверх картинки, не сдвигая её
+  handleOnBanner: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, height: 140, justifyContent: 'flex-start', paddingTop: 12 },
   headOnBanner: { marginTop: -26, alignItems: 'flex-end' },
   avatarOnBanner: { width: 72, height: 72, borderRadius: 36, borderWidth: 4 },
   avatarImage: { width: '100%', height: '100%' },
-  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: space.s },
+  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3 },
   body: { paddingHorizontal: space.m, gap: space.l, paddingBottom: space.s },
   head: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   flex: { flex: 1 },
