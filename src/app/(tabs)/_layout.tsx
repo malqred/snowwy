@@ -5,7 +5,7 @@ import { useTheme } from '@/theme';
 export default function TabsLayout() {
   const t = useTheme();
   return (
-    <NativeTabs tintColor={t.text} backgroundColor={t.bg}>
+    <NativeTabs tintColor={t.text} backgroundColor={t.bg} labelVisibilityMode="labeled">
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Катание</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="figure.skiing.downhill" md="downhill_skiing" />

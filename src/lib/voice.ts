@@ -49,6 +49,25 @@ export async function say(text: string): Promise<boolean> {
   }
 }
 
+/** Есть ли в телефоне русский голос. Если узнать нельзя — считаем, что есть. */
+export function russianVoiceInstalled(): boolean {
+  try {
+    return SnowwyVoice?.hasVoice?.('ru-RU') ?? true;
+  } catch {
+    return true;
+  }
+}
+
+/** Отладка на эмуляторе: произносит фразу без наушников. В готовой сборке не используется. */
+export async function sayForDebug(text: string): Promise<boolean> {
+  if (!__DEV__ || !SnowwyVoice?.speakAnywhere) return false;
+  try {
+    return await SnowwyVoice.speakAnywhere(text, 'ru-RU');
+  } catch {
+    return false;
+  }
+}
+
 export function headphonesConnected(): boolean {
   try {
     return SnowwyVoice?.headphonesConnected() ?? false;

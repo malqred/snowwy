@@ -5,6 +5,9 @@
 //
 // Ускорение 3 значит, что день идёт втрое быстрее: скорости в приложении тоже будут втрое выше.
 // Нужен запущенный эмулятор и adb (ANDROID_HOME или стандартная папка SDK).
+//
+// Высота задаётся ещё и барометром эмулятора: служба геопозиции Google в эмуляторе
+// запоминает высоту первой точки и дальше её не меняет.
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,6 +36,9 @@ for (const p of points) {
   if (wait > 0) await sleep(wait);
   try {
     execFileSync(adb, ['emu', 'geo', 'fix', p.lon.toFixed(6), p.lat.toFixed(6), p.alt.toFixed(1)], { stdio: 'ignore' });
+    // Давление по стандартной атмосфере, гПа
+    const hpa = 1013.25 * Math.pow(1 - p.alt / 44330, 1 / 0.1903);
+    execFileSync(adb, ['emu', 'sensor', 'set', 'pressure', hpa.toFixed(2)], { stdio: 'ignore' });
   } catch {
     console.error('Эмулятор не отвечает. Он запущен?');
     process.exit(1);

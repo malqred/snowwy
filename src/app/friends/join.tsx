@@ -20,6 +20,12 @@ export default function JoinScreen() {
   const friends = useFriends();
   const [name, setName] = useState(friends.name);
   const [code, setCode] = useState(d ?? '');
+  // Пришла новая ссылка-приглашение, пока экран уже открыт: подставляем её
+  const [link, setLink] = useState(d);
+  if (d !== link) {
+    setLink(d);
+    if (d) setCode(d);
+  }
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   // Имя на момент срабатывания сканера: он живёт дольше одного кадра экрана
@@ -45,7 +51,9 @@ export default function JoinScreen() {
       // В группе можно состоять только одной: из прежней выходим
       if (friends.group) await leaveGroup();
       await joinGroup(invite);
-      router.back();
+      // По ссылке-приглашению приложение могло открыться сразу на этом экране — тогда назад некуда
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)/friends');
     } catch (e) {
       Alert.alert('Не получилось войти', errorText(e));
     } finally {

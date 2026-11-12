@@ -317,7 +317,6 @@ const ANDROID_SERVICE = {
   foregroundService: {
     notificationTitle: 'Snowwy записывает катание',
     notificationBody: 'Запись идёт и при заблокированном экране.',
-    notificationColor: '#2F6FED',
     // Смахнули приложение из списка недавних — запись продолжается
     killServiceOnDestroy: false,
   },

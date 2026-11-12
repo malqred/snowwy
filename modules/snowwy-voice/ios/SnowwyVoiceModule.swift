@@ -31,6 +31,11 @@ public final class SnowwyVoiceModule: Module {
       }
     }
 
+    // Есть ли в телефоне голос для языка
+    Function("hasVoice") { (language: String) -> Bool in
+      return AVSpeechSynthesisVoice(language: language) != nil
+    }
+
     Function("headphonesConnected") { () -> Bool in
       return SnowwyVoiceModule.headphonesConnected()
     }

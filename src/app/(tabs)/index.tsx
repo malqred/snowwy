@@ -30,7 +30,7 @@ import { space, useTheme } from '@/theme';
 const STATE_TITLE: Record<LiveState, string> = {
   run: 'Спуск',
   lift: 'Подъём',
-  pause: 'Пауза',
+  pause: 'Остановка',
   move: 'В движении',
 };
 

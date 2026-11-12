@@ -85,6 +85,12 @@ export type Invite = {
 
 const SCHEME = 'snowwy://friends/join?d=';
 const PART = /^[A-Za-z0-9_-]+$/;
+/**
+ * Только в отладочной сборке: сервер группы на компьютере, к которому эмулятор Android
+ * обращается по 10.0.2.2. В готовой сборке __DEV__ = false и принимается только https.
+ */
+const DEV_SERVER = /^http:\/\/10\.0\.2\.2:\d+$/;
+const devBuild = () => typeof __DEV__ !== 'undefined' && __DEV__;
 
 /** Приглашение одной строкой: ссылка, которая открывает приложение. */
 export function inviteLink(v: Invite): string {
@@ -101,7 +107,8 @@ export function parseInvite(text: string): Invite | null {
     const data: unknown = JSON.parse(fromUtf8(fromBase64(code)));
     if (!Array.isArray(data) || data[0] !== 1) return null;
     const [, url, gid, invite, key] = data;
-    if (typeof url !== 'string' || !/^https:\/\/[a-z0-9.-]+$/i.test(url)) return null;
+    if (typeof url !== 'string') return null;
+    if (!/^https:\/\/[a-z0-9.-]+$/i.test(url) && !(devBuild() && DEV_SERVER.test(url))) return null;
     if (![gid, invite, key].every((p) => typeof p === 'string' && PART.test(p))) return null;
     if (fromBase64(key).length !== 32) return null;
     return { url, gid, invite, key };

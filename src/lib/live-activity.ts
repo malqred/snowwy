@@ -14,7 +14,7 @@ const UPDATE_EVERY = 5000;
 const STATE_TITLE: Record<LiveState, string> = {
   run: 'Спуск',
   lift: 'Подъём',
-  pause: 'Пауза',
+  pause: 'Остановка',
   move: 'В движении',
 };
 
@@ -48,8 +48,8 @@ function notify(props: RideActivityProps, paused: boolean) {
   showRideNotification(title, body, mode);
 }
 
-/** Сколько ждать ответа на вопрос о завершении, мс */
-const CONFIRM_FOR = 8000;
+/** Сколько ждать ответа на вопрос о завершении, мс. В шторке Android читать дольше, чем в островке */
+const CONFIRM_FOR = Platform.OS === 'android' ? 15000 : 8000;
 
 export type RideAction = 'pause' | 'stop';
 

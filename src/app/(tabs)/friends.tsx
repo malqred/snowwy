@@ -7,7 +7,7 @@ import { Field } from '@/components/field';
 import { Prompt } from '@/components/prompt';
 import { LogOut, MapPin, Pencil, QrCode, ScanLine, Trash, UserMinus, Users } from '@/components/icons';
 import { TrackMap, type MapPin as Pin } from '@/components/track-map';
-import { Button, Card, ICON_STROKE, Label, Screen, Title } from '@/components/ui';
+import { Button, Card, ICON_STROKE, Label, Screen, switchThumb, Title } from '@/components/ui';
 import { ApiError, errorText } from '@/lib/friends/api';
 import { useAccount } from '@/lib/friends/cloudflare';
 import { ago } from '@/lib/friends/codec';
@@ -273,7 +273,7 @@ export default function FriendsScreen() {
           value={sharing}
           onValueChange={setSharing}
           trackColor={{ true: t.accent, false: t.line }}
-          thumbColor={t.dark && sharing ? t.inverse : undefined}
+          thumbColor={switchThumb(t, sharing)}
         />
       </Card>
 

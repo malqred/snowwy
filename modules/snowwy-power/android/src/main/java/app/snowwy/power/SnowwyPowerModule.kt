@@ -1,5 +1,7 @@
 package app.snowwy.power
 
+import android.app.Notification
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -35,6 +37,22 @@ class SnowwyPowerModule : Module() {
     // false — такого экрана в этом телефоне нет
     Function("openVendorSettings") {
       VENDOR_SCREENS.any { (pkg, cls) -> open(Intent().setComponent(ComponentName(pkg, cls))) }
+    }
+
+    // Ставит уведомление с ходом катания (tag) на место уведомления службы геопозиции,
+    // чтобы в шторке было одно уведомление Snowwy, а не два. false — службы нет
+    Function("mergeRideNotification") { tag: String ->
+      val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+      val active = manager.activeNotifications
+      val ride = active.firstOrNull { it.tag == tag } ?: return@Function false
+      val service = active.firstOrNull {
+        it.tag == null && it.notification.flags and Notification.FLAG_FOREGROUND_SERVICE != 0
+      } ?: return@Function false
+      val merged = ride.notification
+      merged.flags = merged.flags or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR
+      manager.notify(service.id, merged)
+      manager.cancel(ride.tag, ride.id)
+      true
     }
 
     // Страница приложения в настройках системы

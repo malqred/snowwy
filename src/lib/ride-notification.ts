@@ -3,6 +3,8 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import SnowwyPower from '../../modules/snowwy-power';
+
 export const RIDE_NOTIFICATION = 'snowwy-ride';
 const CHANNEL = 'ride';
 
@@ -54,9 +56,21 @@ function prepare(): Promise<void> {
   return prepared;
 }
 
+// Показ и скрытие идут строго по очереди: иначе обновление, отправленное перед самым
+// завершением катания, приходит уже после скрытия, и уведомление остаётся висеть
+let queue: Promise<void> = Promise.resolve();
+let visible = false;
+
 /** Показывает уведомление или заменяет его текст. */
-export async function showRideNotification(title: string, body: string, mode: Mode): Promise<void> {
-  if (Platform.OS !== 'android') return;
+export function showRideNotification(title: string, body: string, mode: Mode): Promise<void> {
+  if (Platform.OS !== 'android') return Promise.resolve();
+  visible = true;
+  queue = queue.then(() => post(title, body, mode));
+  return queue;
+}
+
+async function post(title: string, body: string, mode: Mode) {
+  if (!visible) return;
   try {
     await prepare();
     await Notifications.scheduleNotificationAsync({
@@ -73,18 +87,27 @@ export async function showRideNotification(title: string, body: string, mode: Mo
       },
       trigger: { channelId: CHANNEL },
     });
+    // Запись при заблокированном экране держит своё уведомление службы геопозиции.
+    // Ставим наше на его место, чтобы в шторке было одно уведомление, а не два.
+    merge();
   } catch {
     // уведомления запрещены — запись от этого не зависит
   }
 }
 
-export async function hideRideNotification(): Promise<void> {
-  if (Platform.OS !== 'android') return;
+function merge() {
   try {
-    await Notifications.dismissNotificationAsync(RIDE_NOTIFICATION);
+    SnowwyPower?.mergeRideNotification(RIDE_NOTIFICATION);
   } catch {
-    // уведомления уже нет
+    // не вышло — останутся два уведомления, на запись это не влияет
   }
+}
+
+export function hideRideNotification(): Promise<void> {
+  if (Platform.OS !== 'android') return Promise.resolve();
+  visible = false;
+  queue = queue.then(() => Notifications.dismissNotificationAsync(RIDE_NOTIFICATION).catch(() => {}));
+  return queue;
 }
 
 /** Подключает кнопки уведомления. Нажатия приходят, пока приложение живо в фоне. */

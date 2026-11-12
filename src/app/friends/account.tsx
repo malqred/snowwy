@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { Field } from '@/components/field';
 import { Cloud, KeyRound, LogOut, Trash, UserPlus } from '@/components/icons';
@@ -208,7 +208,7 @@ export default function AccountScreen() {
         <Card style={styles.pad}>
           <Text style={[styles.text, { color: t.sub }]}>
             Зарегистрируйтесь: почта и пароль, затем подтверждение по письму. Страница Cloudflare на английском и
-            откроется поверх приложения; закончив, закройте её кнопкой «Готово» в углу экрана. Если аккаунт уже есть,
+            откроется поверх приложения; закончив, закройте её {Platform.OS === 'ios' ? 'кнопкой «Готово»' : 'крестиком'} в углу экрана. Если аккаунт уже есть,
             пропустите этот шаг.
           </Text>
         </Card>

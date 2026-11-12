@@ -4,6 +4,7 @@ import {
   Camera,
   GeoJSONSource,
   Layer,
+  LogManager,
   Map,
   NativeUserLocation,
   RasterSource,
@@ -46,6 +47,16 @@ const PADDING = { top: 48, right: 36, bottom: 36, left: 36 };
 /** Масштаб, когда на карте одна точка: примерно километр по высоте */
 const CLOSE_ZOOM = 14.5;
 const LIVE_ZOOM = 15;
+
+// Служебные сообщения карты не нужны человеку. «Нет последнего места» приходит, пока GPS
+// ещё ищет спутники, оборванные загрузки — при каждом сдвиге карты, а неподгрузившиеся
+// участки — при плохой связи на склоне: всё это не ошибки, карта просто дорисуется позже.
+LogManager.onLog(({ tag, message }) => {
+  if (tag === 'Mbgl-LocationComponent') return true;
+  if (tag === 'Mbgl-HttpRequest') return true;
+  if (message.includes('Failed to load tile')) return true;
+  return false;
+});
 
 type Feature = GeoJSON.Feature<GeoJSON.Geometry, Record<string, string | number | boolean>>;
 const collection = (features: Feature[]): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features });

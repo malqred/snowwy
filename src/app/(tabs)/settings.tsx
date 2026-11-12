@@ -25,7 +25,7 @@ import {
   Users,
   type IconType,
 } from '@/components/icons';
-import { Button, Card, ICON_STROKE, Label, Screen, Segments, Title } from '@/components/ui';
+import { Button, Card, ICON_STROKE, Label, Screen, Segments, switchThumb, Title } from '@/components/ui';
 import { analyze } from '@/lib/analyze';
 import { autoBackup, chooseBackupFolder, removeAutoBackup, restoreBackup, shareBackup } from '@/lib/backup';
 import { createSession, deleteEverything, finishSession, insertPoints, setPistes } from '@/lib/db';
@@ -36,7 +36,7 @@ import { setSharing, useFriends } from '@/lib/friends/store';
 import { askBackground, openBackgroundSettings, powerAvailable, useBackgroundAllowed, vendorGuide } from '@/lib/power';
 import { updateSettings, useSettings, type GlassLevel, type ThemeMode } from '@/lib/settings';
 import { useTracker } from '@/lib/tracker';
-import { headphonesConnected, say, voiceAvailable } from '@/lib/voice';
+import { headphonesConnected, russianVoiceInstalled, say, sayForDebug, voiceAvailable } from '@/lib/voice';
 import { PALETTES, space, swatches, useTheme } from '@/theme';
 
 const ANDROID = Platform.OS === 'android';
@@ -164,11 +164,23 @@ export default function SettingsScreen() {
   };
 
   const testVoice = async () => {
+    const phrase = 'Спуск 3. Максимальная скорость 54 километра в час. Перепад 420 метров.';
+    if (!russianVoiceInstalled()) {
+      Alert.alert(
+        'Нет русского голоса',
+        ANDROID
+          ? 'В телефоне не установлен голос для русского языка. Настройки телефона → Специальные возможности → Синтез речи (или «Преобразование текста в речь») → настройки движка → установите русский голос.'
+          : 'В iPhone не установлен голос для русского языка: Настройки → Универсальный доступ → Устный контент → Голоса → Русский.'
+      );
+      return;
+    }
+    // Отладочная сборка на эмуляторе: наушников нет, проверяем голос через динамик
+    if (__DEV__ && !headphonesConnected() && (await sayForDebug(phrase))) return;
     if (!headphonesConnected()) {
       Alert.alert('Наушники не подключены', 'Ассистент говорит только в наушниках. Подключите их и попробуйте ещё раз.');
       return;
     }
-    await say('Спуск 3. Максимальная скорость 54 километра в час. Перепад 420 метров.');
+    await say(phrase);
   };
 
   const wipe = () => {
@@ -246,7 +258,7 @@ export default function SettingsScreen() {
             value={settings.keepAwake}
             onValueChange={(keepAwake) => updateSettings({ keepAwake })}
             trackColor={{ true: t.accent, false: t.line }}
-            thumbColor={t.dark && settings.keepAwake ? t.inverse : undefined}
+            thumbColor={switchThumb(t, settings.keepAwake)}
           />
         </Card>
         <Card style={styles.switchRow}>
@@ -264,7 +276,7 @@ export default function SettingsScreen() {
             value={settings.remind}
             onValueChange={(remind) => updateSettings({ remind })}
             trackColor={{ true: t.accent, false: t.line }}
-            thumbColor={t.dark && settings.remind ? t.inverse : undefined}
+            thumbColor={switchThumb(t, settings.remind)}
           />
         </Card>
       </View>
@@ -287,7 +299,7 @@ export default function SettingsScreen() {
             value={settings.voice}
             onValueChange={(voice) => updateSettings({ voice })}
             trackColor={{ true: t.accent, false: t.line }}
-            thumbColor={t.dark && settings.voice ? t.inverse : undefined}
+            thumbColor={switchThumb(t, settings.voice)}
           />
         </Card>
         {voiceAvailable && settings.voice ? (
@@ -310,7 +322,7 @@ export default function SettingsScreen() {
             value={settings.economy}
             onValueChange={(economy) => updateSettings({ economy })}
             trackColor={{ true: t.accent, false: t.line }}
-            thumbColor={t.dark && settings.economy ? t.inverse : undefined}
+            thumbColor={switchThumb(t, settings.economy)}
           />
         </Card>
       </View>
@@ -371,7 +383,7 @@ export default function SettingsScreen() {
             value={settings.friends}
             onValueChange={setSharing}
             trackColor={{ true: t.accent, false: t.line }}
-            thumbColor={t.dark && settings.friends ? t.inverse : undefined}
+            thumbColor={switchThumb(t, settings.friends)}
           />
         </Card>
         <Card style={styles.account}>
@@ -425,7 +437,7 @@ export default function SettingsScreen() {
             value={settings.backup === true}
             onValueChange={toggleBackup}
             trackColor={{ true: t.accent, false: t.line }}
-            thumbColor={t.dark && settings.backup ? t.inverse : undefined}
+            thumbColor={switchThumb(t, settings.backup === true)}
           />
         </Card>
         {ANDROID && settings.backup ? (

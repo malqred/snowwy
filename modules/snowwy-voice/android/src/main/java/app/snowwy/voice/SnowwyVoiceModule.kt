@@ -25,6 +25,8 @@ class SnowwyVoiceModule : Module() {
   private var waiting: Pair<String, String>? = null
   private var focus: AudioFocusRequest? = null
   private var utterance = 0
+  // Только для проверки в отладочной сборке: говорить и без наушников
+  private var anyOutput = false
 
   private val context: Context
     get() = appContext.reactContext ?: throw IllegalStateException("Нет контекста приложения")
@@ -40,7 +42,7 @@ class SnowwyVoiceModule : Module() {
   // Наушники отключили посреди фразы — замолкаем, чтобы звук не ушёл в динамик
   private val devices = object : AudioDeviceCallback() {
     override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
-      if (!headphonesConnected()) {
+      if (!anyOutput && !headphonesConnected()) {
         tts?.stop()
         release()
       }
@@ -72,6 +74,24 @@ class SnowwyVoiceModule : Module() {
     AsyncFunction("speak") { text: String, language: String ->
       if (!headphonesConnected()) return@AsyncFunction false
       if (tts == null) start()
+      if (!ready) {
+        waiting = text to language
+        return@AsyncFunction true
+      }
+      say(text, language)
+    }
+
+    // Есть ли в телефоне голос для языка. Пока синтезатор запускается, ответ неизвестен — true
+    Function("hasVoice") { language: String ->
+      val engine = tts
+      if (engine == null || !ready) return@Function true
+      engine.isLanguageAvailable(Locale.forLanguageTag(language)) >= TextToSpeech.LANG_AVAILABLE
+    }
+
+    // Отладка на эмуляторе, где наушников нет: фраза уходит в динамик
+    AsyncFunction("speakAnywhere") { text: String, language: String ->
+      if (tts == null) start()
+      anyOutput = true
       if (!ready) {
         waiting = text to language
         return@AsyncFunction true
@@ -122,7 +142,10 @@ class SnowwyVoiceModule : Module() {
 
   // Последняя фраза закончилась — возвращаем громкость музыке
   private fun finished(id: String?) {
-    if (id == "snowwy-$utterance") release()
+    if (id == "snowwy-$utterance") {
+      anyOutput = false
+      release()
+    }
   }
 
   private fun duck(): Boolean {

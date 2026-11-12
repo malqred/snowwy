@@ -59,7 +59,10 @@ export default function RootLayout() {
       <StatusBar style={t.dark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
-          headerTransparent: true,
+          // На iPhone содержимое само уходит под прозрачную шапку с отступом, на Android — нет:
+          // там шапка плотная, цвета верха фона, и содержимое начинается под ней
+          headerTransparent: Platform.OS === 'ios',
+          headerStyle: Platform.OS === 'ios' ? undefined : { backgroundColor: t.bgTop },
           headerTintColor: t.text,
           headerShadowVisible: false,
           headerBackTitle: 'Назад',

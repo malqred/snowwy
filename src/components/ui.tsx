@@ -1,6 +1,7 @@
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import type { ReactNode } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -382,3 +383,12 @@ const styles = StyleSheet.create({
   },
   segmentText: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
 });
+
+/**
+ * Цвет кружка переключателя. На Android по умолчанию он бирюзовый (цвет системы), а не в цветах
+ * приложения, поэтому во включённом состоянии красим его в контрастный к акценту цвет.
+ */
+export function switchThumb(t: { dark: boolean; inverse: string }, on: boolean): string | undefined {
+  if (Platform.OS === 'android') return on ? t.inverse : undefined;
+  return t.dark && on ? t.inverse : undefined;
+}
