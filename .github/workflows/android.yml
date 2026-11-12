@@ -42,6 +42,20 @@ jobs:
       - name: Проверить алгоритм
         run: npm test
 
+      # Android ставит новую версию поверх старой, только если её номер сборки больше:
+      # 1.0.3 → 10003. Отладочные сборки остаются с номером 1, чтобы ставиться друг на друга.
+      - name: Номер сборки из версии
+        if: env.DEV != 'true'
+        run: |
+          node -e "
+            const fs = require('fs');
+            const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            const [a, b, c] = app.expo.version.split('.').map(Number);
+            app.expo.android.versionCode = a * 10000 + b * 100 + c;
+            fs.writeFileSync('app.json', JSON.stringify(app, null, 2));
+            console.log('versionCode', app.expo.android.versionCode);
+          "
+
       - name: Сгенерировать проект Android
         run: npx expo prebuild --platform android
 
@@ -90,6 +104,6 @@ jobs:
           else
             gh release create "$TAG" "$FILE" \
               --title "Snowwy $VERSION" \
-              --notes "Snowwy-$VERSION.apk — для Android, ставится прямо с телефона. Snowwy-$VERSION.ipa — для iPhone, ставится через iLoader или Sideloadly. Инструкции — в README." \
+              --notes "Snowwy-$VERSION.apk — для Android: ставится прямо с телефона, а с версии 1.0.3 обновляется из настроек приложения. Инструкции — в README." \
               --target "${{ github.sha }}"
           fi

@@ -24,6 +24,10 @@ export type Settings = {
   backupDir: string;
   /** Android: вопрос о работе в фоне уже задавали */
   powerAsked: boolean;
+  /** Android: когда последний раз проверяли обновления, мс */
+  updateCheckedAt: number;
+  /** Android: версия, о которой попросили не напоминать */
+  updateSkipped: string;
   /** Когда копию последний раз сохраняли вне приложения, мс; 0 — никогда */
   backupSharedAt: number;
   /** Называть итоги спуска голосом, если подключены наушники */
@@ -46,6 +50,8 @@ const DEFAULTS: Settings = {
   backup: null,
   backupDir: '',
   powerAsked: false,
+  updateCheckedAt: 0,
+  updateSkipped: '',
   backupSharedAt: 0,
   voice: false,
   economy: false,

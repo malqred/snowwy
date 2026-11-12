@@ -1,15 +1,31 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Alert, Platform } from 'react-native';
 
 import { autoBackup, chooseBackupFolder } from '@/lib/backup';
 import { getSettings, updateSettings } from '@/lib/settings';
-import { recoverUnfinished } from '@/lib/tracker';
+import { getTracker, recoverUnfinished } from '@/lib/tracker';
+import { checkForUpdate, skipVersion, updateCheckDue } from '@/lib/update';
 import { useTheme } from '@/theme';
 
 export default function RootLayout() {
   const t = useTheme();
+  const router = useRouter();
+
+  // Android: раз в сутки сами проверяем, вышла ли новая версия, и один раз о ней говорим
+  useEffect(() => {
+    if (!updateCheckDue()) return;
+    const timer = setTimeout(async () => {
+      const release = await checkForUpdate();
+      if (!release || getSettings().updateSkipped === release.version || getTracker().recording) return;
+      Alert.alert(`Вышла Snowwy ${release.version}`, 'Обновление ставится прямо из приложения, записи сохранятся.', [
+        { text: 'Позже', style: 'cancel', onPress: () => skipVersion(release.version) },
+        { text: 'Подробнее', onPress: () => router.push('/update') },
+      ]);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [router]);
 
   useEffect(() => {
     recoverUnfinished().catch(() => {});
@@ -76,6 +92,7 @@ export default function RootLayout() {
         <Stack.Screen name="friends/account" options={{ title: 'Аккаунт Cloudflare' }} />
         <Stack.Screen name="friends/join" options={{ title: 'Вход в группу' }} />
         <Stack.Screen name="friends/invite" options={{ title: 'Приглашение' }} />
+        <Stack.Screen name="update" options={{ title: 'Обновление' }} />
       </Stack>
     </ThemeProvider>
   );

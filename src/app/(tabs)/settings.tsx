@@ -12,6 +12,7 @@ import {
   DatabaseBackup,
   FlaskConical,
   FolderOpen,
+  RefreshCw,
   Headphones,
   Leaf,
   MonitorSmartphone,
@@ -35,6 +36,7 @@ import { disconnectAccount, useAccount } from '@/lib/friends/cloudflare';
 import { setSharing, useFriends } from '@/lib/friends/store';
 import { askBackground, openBackgroundSettings, powerAvailable, useBackgroundAllowed, vendorGuide } from '@/lib/power';
 import { updateSettings, useSettings, type GlassLevel, type ThemeMode } from '@/lib/settings';
+import { updatesAvailable, useUpdate } from '@/lib/update';
 import { useTracker } from '@/lib/tracker';
 import { headphonesConnected, russianVoiceInstalled, say, sayForDebug, voiceAvailable } from '@/lib/voice';
 import { PALETTES, space, swatches, useTheme } from '@/theme';
@@ -64,6 +66,7 @@ export default function SettingsScreen() {
   const friends = useFriends();
   const [busy, setBusy] = useState(false);
   const backgroundOk = useBackgroundAllowed();
+  const update = useUpdate();
   const guide = vendorGuide();
 
   const signOut = () => {
@@ -458,6 +461,22 @@ export default function SettingsScreen() {
           При восстановлении добавляются только дни, которых нет в истории.
         </Text>
       </View>
+
+      {updatesAvailable ? (
+        <View style={styles.section}>
+          <Label>Обновления</Label>
+          <Button
+            title={update.release ? `Обновить до ${update.release.version}` : 'Проверить обновления'}
+            kind={update.release ? 'primary' : 'secondary'}
+            icon={RefreshCw}
+            onPress={() => router.push('/update')}
+          />
+          <Text style={[styles.rowSub, { color: t.sub }]}>
+            Новые версии выходят на GitHub. Snowwy проверяет их раз в сутки сам и ставит обновление поверх, все записи
+            сохраняются.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <Label>Данные</Label>

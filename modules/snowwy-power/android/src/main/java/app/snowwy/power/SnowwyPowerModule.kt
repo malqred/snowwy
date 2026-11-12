@@ -6,7 +6,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
+import java.io.File
 import android.provider.Settings
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -53,6 +55,34 @@ class SnowwyPowerModule : Module() {
       manager.notify(service.id, merged)
       manager.cancel(ride.tag, ride.id)
       true
+    }
+
+    // Разрешено ли устанавливать приложения (Android 8+ спрашивает это у человека)
+    Function("canInstallPackages") {
+      Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()
+    }
+
+    Function("openInstallPermission") {
+      open(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
+    }
+
+    // Системное окно установки для .apk из кэша приложения. Файл отдаётся через
+    // FileProvider модуля expo-file-system: он открывает доступ к папке кэша.
+    Function("installApk") { fileUri: String ->
+      val file = File(Uri.parse(fileUri).path ?: return@Function false)
+      val cache = context.cacheDir.canonicalFile
+      val target = file.canonicalFile
+      if (!target.exists() || !target.path.startsWith(cache.path + File.separator)) return@Function false
+      val relative = target.path.substring(cache.path.length + 1).replace(File.separatorChar, '/')
+      val uri = Uri.Builder()
+        .scheme("content")
+        .authority("${context.packageName}.FileSystemFileProvider")
+        .encodedPath("/cached_expo_files/" + Uri.encode(relative, "/"))
+        .build()
+      val intent = Intent(Intent.ACTION_VIEW)
+        .setDataAndType(uri, "application/vnd.android.package-archive")
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      open(intent)
     }
 
     // Страница приложения в настройках системы

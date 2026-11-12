@@ -607,6 +607,10 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+export function getTracker(): TrackerState {
+  return state;
+}
+
 export function useTracker(): TrackerState {
   return useSyncExternalStore(subscribe, () => state);
 }
