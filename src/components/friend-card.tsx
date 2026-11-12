@@ -8,7 +8,8 @@ import { distance, int, kmh, span } from '@/lib/format';
 import { relativeLong, type Relative } from '@/lib/relative';
 import { space, useTheme } from '@/theme';
 
-import { BatteryCharging, MapPin } from './icons';
+import { Battery } from './battery';
+import { MapPin } from './icons';
 import { Button, ICON_STROKE, Label, StatGrid, type StatItem } from './ui';
 
 type Props = {
@@ -88,9 +89,9 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
             ) : null}
             {info?.bat != null ? (
               <View style={styles.fact}>
-                <BatteryCharging size={16} color={info.bat <= 15 && !info.chg ? t.danger : t.sub} strokeWidth={ICON_STROKE} />
-                <Text style={[styles.factText, { color: info.bat <= 15 && !info.chg ? t.danger : t.text }]}>
-                  Заряд {info.bat}%{info.chg ? ', заряжается' : ''}
+                <Battery level={info.bat} charging={info.chg} height={24} />
+                <Text style={[styles.factText, { color: info.bat <= 20 && !info.chg ? t.danger : t.text }]}>
+                  {info.chg ? 'Заряжается' : info.bat <= 20 ? 'Телефон скоро сядет' : 'Заряд телефона'}
                 </Text>
               </View>
             ) : null}

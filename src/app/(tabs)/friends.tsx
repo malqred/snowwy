@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Field } from '@/components/field';
 import { Prompt } from '@/components/prompt';
+import { Battery } from '@/components/battery';
 import { FriendCard } from '@/components/friend-card';
 import { Flag, LogOut, MapPin, Pencil, QrCode, ScanLine, Trash, UserMinus, Users } from '@/components/icons';
 import { TrackMap, type MapPin as Pin } from '@/components/track-map';
@@ -368,7 +369,6 @@ export default function FriendsScreen() {
         {rows.map(({ m, age, color }) => {
           const where = whereIs(m);
           const bat = m.info?.bat;
-          const low = bat != null && bat <= 15 && !m.info?.chg;
           return (
           <Pressable
             key={m.id}
@@ -410,10 +410,7 @@ export default function FriendsScreen() {
               <View style={styles.side}>
                 <Text style={[styles.age, { color: t.sub }]}>{m.at > 0 ? ago(age) : '—'}</Text>
                 {bat != null ? (
-                  <Text style={[styles.battery, { color: low ? t.danger : t.sub }]}>
-                    {m.info?.chg ? '⚡' : ''}
-                    {bat}%
-                  </Text>
+                  <Battery level={bat} charging={m.info?.chg} height={22} />
                 ) : null}
               </View>
               {group.admin && !m.me ? (
@@ -507,6 +504,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   side: { alignItems: 'flex-end', gap: 2 },
-  battery: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
   meetActions: { flexDirection: 'row', gap: space.l, marginTop: 4 },
 });
