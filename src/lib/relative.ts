@@ -90,9 +90,9 @@ export function useMySpot(active: boolean): Spot | null {
       try {
         const perm = await Location.getForegroundPermissionsAsync();
         if (!perm.granted) return;
-        const loc =
-          (await Location.getLastKnownPositionAsync({ maxAge: 5 * 60 * 1000 })) ??
-          (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+        // Только последнее известное место: свежий запрос на Android показывает системный
+        // вопрос «включить точную геолокацию» при каждом открытии вкладки
+        const loc = await Location.getLastKnownPositionAsync({ maxAge: 15 * 60 * 1000 });
         if (!stopped && loc) setSpot({ lat: loc.coords.latitude, lon: loc.coords.longitude, alt: loc.coords.altitude });
       } catch {
         // места нет — расстояния до друзей просто не покажем

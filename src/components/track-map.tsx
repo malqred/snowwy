@@ -5,6 +5,8 @@ import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 
 import type { Coord, MapLine } from '@/lib/lines';
 import { updateSettings, useSettings } from '@/lib/settings';
+
+import { MeetFlag } from './meet-flag';
 import { useTheme } from '@/theme';
 
 /** Трассы и подъёмники из OpenStreetMap (сервис OpenSnowMap). Нужен интернет. */
@@ -151,32 +153,7 @@ export function TrackMap({ lines, pins, focus, live = false, marker, meet, onPre
   );
 }
 
-/** Метка точки встречи: флажок на ножке. */
-export function MeetFlag() {
-  return (
-    <View style={styles.meet}>
-      <View style={styles.meetHead}>
-        <Text style={styles.meetText}>⚑</Text>
-      </View>
-      <View style={styles.meetLeg} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  meet: { alignItems: 'center' },
-  meetHead: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: '#E5484D',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  meetText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
-  meetLeg: { width: 3, height: 10, backgroundColor: '#E5484D' },
   wrap: {
     borderRadius: 18,
     borderCurve: 'continuous',

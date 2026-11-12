@@ -18,7 +18,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { updateSettings, useSettings } from '@/lib/settings';
 import { useTheme } from '@/theme';
 
-import { MeetFlag, type MapPin, type Props } from './track-map';
+import { MeetFlag } from './meet-flag';
+// Только типы: сам модуль track-map на Android — этот же файл
+import type { MapPin, Props } from './track-map';
 
 export type { MapPin } from './track-map';
 

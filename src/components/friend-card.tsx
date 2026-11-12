@@ -107,7 +107,7 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
               <View style={styles.section}>
                 <Label>Сегодня</Label>
                 {today ? (
-                  <StatGrid items={todayItems} columns={3} />
+                  <StatGrid items={todayItems} columns={2} />
                 ) : (
                   <Text style={[styles.note, { color: t.sub }]}>Сегодня ещё не катался.</Text>
                 )}
