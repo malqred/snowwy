@@ -6,26 +6,36 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { AchievementBadge, tierOf } from '@/components/achievement-badge';
-import { Pencil } from '@/components/icons';
+import { FriendCard } from '@/components/friend-card';
+import { IdCard, Pencil } from '@/components/icons';
 import { Logo } from '@/components/logo';
 import { Prompt } from '@/components/prompt';
 import { RecordsBlock } from '@/components/records-block';
-import { Card, ICON_STROKE, Label, Screen, StatStrip } from '@/components/ui';
+import { Button, Card, ICON_STROKE, Label, Screen, StatStrip } from '@/components/ui';
+import { computeAchievements } from '@/lib/achievement-days';
 import {
   achievementTitle,
   CATEGORIES,
-  computeAchievements,
+  progressOf,
+  progressText,
   TOTAL_ACHIEVEMENTS,
   type Achievement,
 } from '@/lib/achievements';
 import { listSessions } from '@/lib/db';
 import { dateIso, dateLong, int, km, span } from '@/lib/format';
-import { NAME_MAX, pushFriendInfo, setFriendName, useFriends } from '@/lib/friends/store';
+import { useOwnInfo } from '@/lib/friends/info';
+import { NAME_MAX, pushFriendInfo, setFriendName, useFriends, type Member } from '@/lib/friends/store';
+import { useSettings } from '@/lib/settings';
 import { pickImage, remove, useProfileImages, type ImageKind } from '@/lib/profile';
 import type { Session } from '@/lib/types';
 import { space, useTheme } from '@/theme';
 
 const AVATAR = 96;
+
+/** Я сам в виде участника группы — для своей карточки. */
+function ownMember(name: string): Member {
+  return { id: 'me', name: name || 'Вы', me: true, owner: false, pos: null, at: 0, info: null, infoAt: 0, picAt: 0 };
+}
 
 export default function ProfileScreen() {
   const t = useTheme();
@@ -35,6 +45,11 @@ export default function ProfileScreen() {
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [achievements, setAchievements] = useState<Achievement[] | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const [showCard, setShowCard] = useState(false);
+  // Время открытия карточки: по нему видно, сегодняшние ли итоги
+  const [cardAt, setCardAt] = useState(0);
+  const ownInfo = useOwnInfo(showCard);
+  const settings = useSettings();
 
   useFocusEffect(
     useCallback(() => {
@@ -126,7 +141,7 @@ export default function ProfileScreen() {
       achievementTitle(a.category.id, a.value),
       a.earnedAt != null
         ? `Получено ${dateLong(a.earnedAt)}. Материал — ${tierOf(a.index, a.category.levels.length).name.toLowerCase()}.`
-        : 'Ещё не получено.'
+        : `Ещё не получено. ${progressText(a)}`
     );
   };
 
@@ -192,6 +207,12 @@ export default function ProfileScreen() {
           />
         ) : null}
 
+        <Button title="Моя карточка для друзей" kind="secondary" icon={IdCard} onPress={() => {
+            setCardAt(Date.now());
+            setShowCard(true);
+          }}
+        />
+
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: t.text }]}>Достижения</Text>
           {CATEGORIES.map((category) => {
@@ -208,13 +229,16 @@ export default function ProfileScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badges}>
                   {category.levels.map((value, index) => {
                     const a = items[index];
+                    // Под ближайшим неполученным значком — сколько пройдено до него
+                    const next = a != null && a.earnedAt == null && (index === 0 || items[index - 1]?.earnedAt != null);
+                    const share = a ? progressOf(a) : 0;
                     return (
                       <Pressable
                         key={value}
                         onPress={() => a && explain(a)}
                         accessibilityRole="button"
                         accessibilityLabel={`${achievementTitle(category.id, value)}${a?.earnedAt ? ', получено' : ', ещё не получено'}`}
-                        style={({ pressed }) => pressed && { opacity: 0.6 }}>
+                        style={({ pressed }) => [styles.badgeCell, pressed && { opacity: 0.6 }]}>
                         <AchievementBadge
                           category={category.id}
                           value={value}
@@ -223,6 +247,11 @@ export default function ProfileScreen() {
                           locked={!a?.earnedAt}
                           size={64}
                         />
+                        {next ? (
+                          <View style={[styles.progress, { backgroundColor: t.line }]}>
+                            <View style={[styles.progressFill, { backgroundColor: t.accent, width: `${Math.round(share * 100)}%` }]} />
+                          </View>
+                        ) : null}
                       </Pressable>
                     );
                   })}
@@ -231,14 +260,29 @@ export default function ProfileScreen() {
             );
           })}
           <Text style={[styles.note, { color: t.sub }]}>
-            Нажмите на значок, чтобы узнать, за что он и когда получен. Средняя скорость считается по спускам длиной от
-            300 метров.
+            Нажмите на значок, чтобы узнать, за что он и когда получен, а у неполученного — сколько осталось. Полоска
+            под значком — путь к следующему. Средняя скорость считается по спускам длиной от 300 метров.
           </Text>
         </View>
 
         <RecordsBlock sessions={list} />
       </View>
 
+      {showCard ? (
+        <FriendCard
+          member={ownMember(name)}
+          color={t.accent}
+          status={friends.group ? 'это вы' : 'это вы · вы не в группе'}
+          age={0}
+          where={null}
+          onShowOnMap={null}
+          onClose={() => setShowCard(false)}
+          now={cardAt}
+          avatar={images.avatar}
+          banner={images.banner}
+          own={{ info: ownInfo, hidden: !settings.friendsStats }}
+        />
+      ) : null}
       <Prompt
         visible={renaming}
         title="Ваше имя"
@@ -284,5 +328,8 @@ const styles = StyleSheet.create({
   categoryHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.m },
   count: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   badges: { paddingHorizontal: 10, gap: 4 },
+  badgeCell: { alignItems: 'center', gap: 4 },
+  progress: { width: 44, height: 4, borderRadius: 2, overflow: 'hidden' },
+  progressFill: { height: 4, borderRadius: 2 },
   note: { fontSize: 13, lineHeight: 18, paddingHorizontal: 4 },
 });

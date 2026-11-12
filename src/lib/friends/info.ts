@@ -1,8 +1,10 @@
 // Сводка для группы: итоги сегодняшнего катания, личные рекорды и заряд телефона.
 // Подключается к хранилищу группы при запуске приложения (см. src/app/_layout.tsx).
 import * as Battery from 'expo-battery';
+import { useEffect, useState } from 'react';
 
-import { computeAchievements, levelsOf, type AchievementLevels } from '../achievements';
+import { computeAchievements } from '../achievement-days';
+import { levelsOf, type AchievementLevels } from '../achievements';
 import { listSessions } from '../db';
 import { getTracker } from '../tracker';
 import type { Session, Totals } from '../types';
@@ -87,3 +89,20 @@ export async function buildFriendInfo(fresh = false): Promise<FriendInfo> {
 }
 
 setInfoProvider(buildFriendInfo);
+
+/** Своя сводка для своей карточки: собирается заново при каждом открытии. 'loading' — ещё собирается. */
+export function useOwnInfo(active: boolean): FriendInfo | null | 'loading' {
+  const [info, setInfo] = useState<FriendInfo | null | 'loading'>('loading');
+  useEffect(() => {
+    if (!active) return;
+    let on = true;
+    buildFriendInfo(true)
+      .then((next) => on && setInfo(next))
+      .catch(() => on && setInfo(null));
+    return () => {
+      on = false;
+      setInfo('loading');
+    };
+  }, [active]);
+  return info;
+}

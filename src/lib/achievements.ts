@@ -1,10 +1,7 @@
-// Достижения: пороги по пяти категориям и подсчёт, какие из них уже получены.
-// Рисунок значков — src/components/achievement-badge.tsx (тот же, что в design/achievements).
-import Storage from 'expo-sqlite/kv-store';
-
-import { analyze } from './analyze';
-import { getPoints } from './db';
-import type { Session, Totals } from './types';
+// Достижения: пороги по пяти категориям, подписи и подсчёт, какие из них получены.
+// Здесь нет ничего, что зависит от телефона, — всё проверяется тестами (tests/achievements.test.mjs).
+// Чтение записей и разбор старых дней — в achievement-days.ts. Рисунок значков — components/achievement-badge.tsx.
+import type { Totals } from './types';
 
 export type AchievementCategory = 'speed' | 'avg' | 'length' | 'vertical' | 'day';
 
@@ -47,8 +44,28 @@ export type Achievement = {
   /** Когда получено, мс; null — ещё нет */
   earnedAt: number | null;
   sessionId: number | null;
+  /** Лучший результат в этой категории за все дни (км/ч или м) */
+  best: number;
 };
 
+/** Лучшие показатели одного дня катания — по ним проверяются достижения. */
+export type DayBest = {
+  /** км/ч */
+  maxSpeed: number;
+  /** Лучшая средняя скорость одного спуска длиной от AVG_MIN_RUN, км/ч */
+  bestAvg: number;
+  /** Самый длинный спуск, м */
+  longest: number;
+  /** Наибольший перепад одного спуска, м */
+  vertical: number;
+  /** Расстояние на спусках за день, м */
+  distance: number;
+};
+
+/** Средняя скорость короткого съезда — случайность: такие спуски в зачёт средней не идут, м */
+export const AVG_MIN_RUN = 300;
+
+const num = (v: number, digits: number) => v.toFixed(digits).replace('.', ',');
 const km = (m: number) => `${m / 1000}`.replace('.', ',');
 
 /** Число и единица на значке: «60 км/ч», «500 м», «2 км», «1 500 м». */
@@ -76,25 +93,35 @@ export function achievementTitle(category: AchievementCategory, value: number): 
   }
 }
 
-/** Лучшие показатели одного дня катания — по ним проверяются достижения. */
-export type DayBest = {
-  /** км/ч */
-  maxSpeed: number;
-  /** Лучшая средняя скорость одного спуска, км/ч */
-  bestAvg: number;
-  /** Самый длинный спуск, м */
-  longest: number;
-  /** Наибольший перепад одного спуска, м */
-  vertical: number;
-  /** Расстояние на спусках за день, м */
-  distance: number;
-};
+/** Показатель категории словами: «74,2 км/ч», «830 м», «12,4 км». */
+export function formatValue(category: AchievementCategory, value: number): string {
+  if (category === 'speed' || category === 'avg') return `${num(value, value >= 100 ? 0 : 1)} км/ч`;
+  if (category === 'vertical' || value < 1000) return `${Math.round(value)} м`;
+  return `${num(value / 1000, 1)} км`;
+}
 
-/** Средняя скорость короткого съезда — случайность: такие спуски в зачёт средней не идут, м */
-export const AVG_MIN_RUN = 300;
+/** Доля пути к ступени: 0…1. */
+export function progressOf(a: Pick<Achievement, 'best' | 'value' | 'earnedAt'>): number {
+  if (a.earnedAt != null) return 1;
+  return Math.max(0, Math.min(0.99, a.best / a.value));
+}
 
-/** Лучшие показатели прямо из итогов дня, если там есть всё нужное. */
-function fromTotals(t: Totals): DayBest | null {
+/** Сколько осталось до неполученной ступени — для подсказки по нажатию на значок. */
+export function progressText(a: Achievement): string {
+  const c = a.category.id;
+  if (a.earnedAt != null) return '';
+  if (a.best <= 0) {
+    return c === 'avg'
+      ? `Пока нет спусков длиной от ${AVG_MIN_RUN} м — средняя скорость считается по ним.`
+      : 'Пока нет ни одного дня катания.';
+  }
+  const label = c === 'day' ? 'Лучший день' : 'Лучший результат';
+  const left = formatValue(c, a.value - a.best);
+  return `${label} — ${formatValue(c, a.best)}. Осталось ${left} (${Math.round(progressOf(a) * 100)}% пути).`;
+}
+
+/** Лучшие показатели прямо из итогов дня, если там есть всё нужное (записи с 1.0.4). */
+export function dayBestFromTotals(t: Totals): DayBest | null {
   if (t.bestRunAvgSpeed == null || t.longestRun == null || t.biggestRunVertical == null) return null;
   return {
     maxSpeed: t.maxSpeed * 3.6,
@@ -105,63 +132,18 @@ function fromTotals(t: Totals): DayBest | null {
   };
 }
 
-const CACHE = (id: number) => `ach.day.${id}`;
-
-/**
- * Лучшие показатели дня. У старых записей в итогах нет средней скорости спусков —
- * тогда день один раз разбирается заново по точкам, результат запоминается.
- * quick — не разбирать заново, взять что есть (для сводки друзьям в фоне).
- */
-export async function dayBest(s: Session, quick = false): Promise<DayBest | null> {
-  if (!s.totals) return null;
-  const direct = fromTotals(s.totals);
-  if (direct) return direct;
-  try {
-    const cached = Storage.getItemSync(CACHE(s.id));
-    if (cached) return JSON.parse(cached) as DayBest;
-  } catch {
-    // кэша нет — посчитаем
-  }
-  const partial: DayBest = {
-    maxSpeed: s.totals.maxSpeed * 3.6,
-    bestAvg: 0,
-    longest: s.totals.longestRun ?? 0,
-    vertical: s.totals.biggestRunVertical ?? 0,
-    distance: s.totals.distance,
-  };
-  if (quick) return partial;
-  try {
-    const { totals } = analyze(await getPoints(s.id));
-    const best: DayBest = {
-      maxSpeed: partial.maxSpeed,
-      bestAvg: (totals.bestRunAvgSpeed ?? 0) * 3.6,
-      longest: Math.max(partial.longest, totals.longestRun ?? 0),
-      vertical: Math.max(partial.vertical, totals.biggestRunVertical ?? 0),
-      distance: partial.distance,
-    };
-    Storage.setItem(CACHE(s.id), JSON.stringify(best)).catch(() => {});
-    return best;
-  } catch {
-    return partial;
-  }
-}
-
-const valueOf = (best: DayBest, c: AchievementCategory): number =>
+export const valueOf = (best: DayBest, c: AchievementCategory): number =>
   c === 'speed' ? best.maxSpeed : c === 'avg' ? best.bestAvg : c === 'length' ? best.longest : c === 'vertical' ? best.vertical : best.distance;
 
-/** Все достижения: полученные — с датой первого раза, остальные — пустые. */
-export async function computeAchievements(sessions: Session[], quick = false): Promise<Achievement[]> {
-  const byDate = [...sessions].filter((s) => s.totals).sort((a, b) => a.startedAt - b.startedAt);
-  const days: { s: Session; best: DayBest }[] = [];
-  for (const s of byDate) {
-    const best = await dayBest(s, quick);
-    if (best) days.push({ s, best });
-  }
+/** Все достижения по лучшим показателям дней: полученные — с первым днём, когда это случилось. */
+export function achievementsFromDays(days: { id: number; startedAt: number; best: DayBest }[]): Achievement[] {
+  const byDate = [...days].sort((a, b) => a.startedAt - b.startedAt);
   const out: Achievement[] = [];
   for (const category of CATEGORIES) {
+    const best = byDate.reduce((m, d) => Math.max(m, valueOf(d.best, category.id)), 0);
     category.levels.forEach((value, index) => {
-      const first = days.find((d) => valueOf(d.best, category.id) >= value);
-      out.push({ category, index, value, earnedAt: first?.s.startedAt ?? null, sessionId: first?.s.id ?? null });
+      const first = byDate.find((d) => valueOf(d.best, category.id) >= value);
+      out.push({ category, index, value, earnedAt: first?.startedAt ?? null, sessionId: first?.id ?? null, best });
     });
   }
   return out;
@@ -174,6 +156,17 @@ export function levelsOf(list: Achievement[]): AchievementLevels {
     if (a.earnedAt != null) levels[a.category.id] = Math.max(levels[a.category.id] ?? 0, a.index + 1);
   }
   return levels;
+}
+
+/** Уровни, присланные другом: числа вне диапазона и незнакомые категории отбрасываются. */
+export function readLevels(raw: unknown): AchievementLevels | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const out: AchievementLevels = {};
+  for (const c of CATEGORIES) {
+    const v = (raw as Record<string, unknown>)[c.id];
+    if (typeof v === 'number' && isFinite(v)) out[c.id] = Math.max(0, Math.min(c.levels.length, Math.round(v)));
+  }
+  return out;
 }
 
 /** Полученные значки по уровням друга: самые старшие в каждой категории идут первыми. */

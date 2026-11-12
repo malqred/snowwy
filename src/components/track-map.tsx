@@ -7,6 +7,7 @@ import type { Coord, MapLine } from '@/lib/lines';
 import { updateSettings, useSettings } from '@/lib/settings';
 
 import { MeetFlag } from './meet-flag';
+import { PinFace } from './pin-face';
 import { useTheme } from '@/theme';
 
 /** Трассы и подъёмники из OpenStreetMap (сервис OpenSnowMap). Нужен интернет. */
@@ -23,6 +24,8 @@ export type MapPin = {
   letter: string;
   /** Место давно не обновлялось */
   dim?: boolean;
+  /** Файл аватарки; пусто — первая буква имени */
+  image?: string;
 };
 
 export type Props = {
@@ -103,16 +106,8 @@ export function TrackMap({ lines, pins, focus, live = false, marker, meet, onPre
           />
         ))}
         {(pins ?? []).map((p) => (
-          <Marker
-            // Вид метки рисуется один раз, поэтому при смене буквы или цвета она создаётся заново
-            key={`${p.id}:${p.letter}:${p.color}:${p.dim ? 1 : 0}`}
-            coordinate={p.coord}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}>
-            <View style={[styles.pin, { backgroundColor: p.color, opacity: p.dim ? 0.55 : 1 }]}>
-              <Text style={styles.pinText}>{p.letter}</Text>
-            </View>
-          </Marker>
+          // Вид метки рисуется один раз, поэтому при смене буквы, цвета или аватарки она создаётся заново
+          <PersonMarker key={`${p.id}:${p.letter}:${p.color}:${p.dim ? 1 : 0}:${p.image ?? ''}`} pin={p} />
         ))}
         {meet ? (
           <Marker key={`meet:${meet.latitude}:${meet.longitude}`} coordinate={meet} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
@@ -153,6 +148,16 @@ export function TrackMap({ lines, pins, focus, live = false, marker, meet, onPre
   );
 }
 
+/** Человек на карте. Метка с аватаркой перерисовывается, пока картинка не загрузится, потом замирает. */
+function PersonMarker({ pin }: { pin: MapPin }) {
+  const [ready, setReady] = useState(!pin.image);
+  return (
+    <Marker coordinate={pin.coord} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={!ready}>
+      <PinFace color={pin.color} letter={pin.letter} image={pin.image} dim={pin.dim} onLoad={() => setReady(true)} />
+    </Marker>
+  );
+}
+
 const styles = StyleSheet.create({
   wrap: {
     borderRadius: 18,
@@ -171,14 +176,4 @@ const styles = StyleSheet.create({
   },
   toggleText: { fontSize: 13, fontWeight: '600' },
   marker: { width: 18, height: 18, borderRadius: 9, borderWidth: 3 },
-  pin: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pinText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });

@@ -1,5 +1,6 @@
 import Svg, { Path, Rect, Text as SvgText } from 'react-native-svg';
 
+import { batteryColor } from '@/lib/geo';
 import { useTheme } from '@/theme';
 
 type Props = {
@@ -12,12 +13,7 @@ type Props = {
 
 const BOLT = 'M40 3 L32 13.5 H37 L35 21 L43 10.5 H38 Z';
 
-/** Цвет заряда: красный — почти сел, оранжевый — меньше половины, зелёный — хватит. */
-export function batteryColor(level: number): string {
-  if (level <= 20) return '#E5484D';
-  if (level <= 50) return '#F0A23B';
-  return '#4CB05A';
-}
+export { batteryColor } from '@/lib/geo';
 
 /**
  * Значок батарейки с процентами внутри, как в строке состояния телефона.

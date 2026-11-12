@@ -32,6 +32,7 @@ import {
 import { inTime, plural, time } from '@/lib/format';
 import { ensureNotifyPermission } from '@/lib/notify';
 import { relative, relativeShort, useMySpot } from '@/lib/relative';
+import { useOwnInfo } from '@/lib/friends/info';
 import { useProfileImages } from '@/lib/profile';
 import { useSettings } from '@/lib/settings';
 import { useTracker } from '@/lib/tracker';
@@ -79,6 +80,8 @@ export default function FriendsScreen() {
   const inGroup = group != null;
   const me = useMySpot(inGroup);
   const myImages = useProfileImages();
+  // Своя карточка собирается прямо на телефоне — хук вызывается до раннего возврата
+  const ownInfo = useOwnInfo(opened != null && members.some((m) => m.id === opened && m.me));
 
   // Пока вкладка открыта, список обновляется раз в полминуты, а «20 с назад» — каждые 5 секунд
   useFocusEffect(
@@ -258,6 +261,7 @@ export default function FriendsScreen() {
       color: r.color,
       letter: letter(r.m.name),
       dim: r.age > STALE,
+      image: (r.m.me ? myImages.avatar : friends.pics[r.m.id]?.avatar) || undefined,
     }));
 
   const showOnMap = (m: Member) => {
@@ -280,6 +284,7 @@ export default function FriendsScreen() {
     ]);
   };
   const openedRow = rows.find((r) => r.m.id === opened) ?? null;
+  const ownOpen = openedRow?.m.me === true;
 
   const sharing = settings.friends;
   const mine = !sharing
@@ -466,6 +471,7 @@ export default function FriendsScreen() {
           onShowOnMap={openedRow.m.pos ? () => showOnMap(openedRow.m) : null}
           onClose={() => setOpened(null)}
           now={now}
+          own={ownOpen ? { info: ownInfo, hidden: !settings.friendsStats } : undefined}
           avatar={openedRow.m.me ? myImages.avatar : (friends.pics[openedRow.m.id]?.avatar ?? '')}
           banner={openedRow.m.me ? myImages.banner : (friends.pics[openedRow.m.id]?.banner ?? '')}
         />

@@ -10,6 +10,7 @@ import {
   RasterSource,
   ViewAnnotation,
   type CameraRef,
+  type ViewAnnotationRef,
   type MapProps,
 } from '@maplibre/maplibre-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +20,7 @@ import { updateSettings, useSettings } from '@/lib/settings';
 import { useTheme } from '@/theme';
 
 import { MeetFlag } from './meet-flag';
+import { PinFace } from './pin-face';
 // Только типы: сам модуль track-map на Android — этот же файл
 import type { MapPin, Props } from './track-map';
 
@@ -130,18 +132,6 @@ export function TrackMap({ lines, pins, focus, live = false, marker, meet, onPre
     [lines, satellite, t.text]
   );
 
-  const pinData = useMemo(
-    () =>
-      collection(
-        (pins ?? []).map((p: MapPin) => ({
-          type: 'Feature',
-          properties: { color: p.color, letter: p.letter, opacity: p.dim ? 0.55 : 1 },
-          geometry: { type: 'Point', coordinates: [p.coord.longitude, p.coord.latitude] },
-        }))
-      ),
-    [pins]
-  );
-
   const markerData = useMemo(
     () =>
       collection(
@@ -205,32 +195,10 @@ export function TrackMap({ lines, pins, focus, live = false, marker, meet, onPre
           </RasterSource>
         ) : null}
 
-        <GeoJSONSource id="snowwy-pins" data={pinData}>
-          <Layer
-            id="snowwy-pins-circle"
-            type="circle"
-            paint={{
-              'circle-radius': 13,
-              'circle-color': ['get', 'color'],
-              'circle-opacity': ['get', 'opacity'],
-              'circle-stroke-width': 2,
-              'circle-stroke-color': '#FFFFFF',
-              'circle-stroke-opacity': ['get', 'opacity'],
-            }}
-          />
-          <Layer
-            id="snowwy-pins-letter"
-            type="symbol"
-            layout={{
-              'text-field': ['get', 'letter'],
-              'text-font': ['Noto Sans Bold'],
-              'text-size': 14,
-              'text-allow-overlap': true,
-              'text-ignore-placement': true,
-            }}
-            paint={{ 'text-color': '#FFFFFF' }}
-          />
-        </GeoJSONSource>
+        {/* Люди — обычными видами поверх карты: так на метке может быть аватарка */}
+        {(pins ?? []).map((p: MapPin) => (
+          <PersonPin key={`${p.id}:${p.image ?? ''}`} pin={p} />
+        ))}
 
         {meet ? (
           <ViewAnnotation id="snowwy-meet" lngLat={[meet.longitude, meet.latitude]} anchor="bottom">
@@ -276,6 +244,33 @@ export function TrackMap({ lines, pins, focus, live = false, marker, meet, onPre
         <Text style={[styles.credit, { color: satellite ? '#FFFFFF' : t.sub }]}>© OpenSnowMap, OpenStreetMap</Text>
       ) : null}
     </View>
+  );
+}
+
+/**
+ * Человек на карте. На Android метка — снимок вида: когда аватарка загрузилась,
+ * снимок нужно сделать заново, иначе на карте останется пустой кружок.
+ */
+function PersonPin({ pin }: { pin: MapPin }) {
+  const ref = useRef<ViewAnnotationRef>(null);
+  return (
+    <ViewAnnotation
+      ref={ref}
+      id={`snowwy-pin-${pin.id}`}
+      lngLat={[pin.coord.longitude, pin.coord.latitude]}
+      anchor="center">
+      <PinFace
+        color={pin.color}
+        letter={pin.letter}
+        image={pin.image}
+        dim={pin.dim}
+        onLoad={() => {
+          // Картинка уже на экране, но кадр ещё не дорисован — снимаем на следующем
+          requestAnimationFrame(() => ref.current?.refresh());
+          setTimeout(() => ref.current?.refresh(), 300);
+        }}
+      />
+    </ViewAnnotation>
   );
 }
 

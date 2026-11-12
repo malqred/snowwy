@@ -6,13 +6,15 @@ import { useSyncExternalStore } from 'react';
 
 import { time } from '../format';
 import { cancelNotify, notifyLater, notifyNow } from '../notify';
-import { CATEGORIES, type AchievementLevels } from '../achievements';
 import { groupImage, imagesKey, type ImageKind } from '../profile';
 import { getSettings, updateSettings } from '../settings';
 import { ApiError, call } from './api';
 import { ensureServer } from './cloudflare';
 import { fromBase64, inviteLink, type Invite } from './codec';
 import { randomId, randomKey, randomSecret, seal, unseal } from './crypto';
+import { readInfo, type FriendInfo } from './summary';
+
+export type { FriendDay, FriendInfo, FriendRecords } from './summary';
 
 /** Как часто отправлять свою точку и обновлять чужие, мс */
 export const SYNC_EVERY = 30000;
@@ -45,47 +47,6 @@ export type Pos = {
   alt?: number;
   /** Что делает сейчас: спуск, подъёмник или стоит */
   st?: 'run' | 'lift' | 'stop';
-};
-
-/** Итоги дня для карточки друга. */
-export type FriendDay = {
-  /** День, к которому относятся итоги: 2026-11-12 */
-  date: string;
-  runs: number;
-  /** м */
-  vertical: number;
-  /** м */
-  distance: number;
-  /** м/с */
-  maxSpeed: number;
-  /** Время на спусках, с */
-  runTime: number;
-  /** Самый длинный спуск, м */
-  longest: number;
-};
-
-/** Личные рекорды для карточки друга. */
-export type FriendRecords = {
-  /** м/с */
-  maxSpeed: number;
-  /** м */
-  longestRun: number;
-  /** Наибольший перепад одного спуска, м */
-  biggestRunVertical: number;
-  /** Наибольший перепад за день, м */
-  dayVertical: number;
-};
-
-/** Сводка, которую человек показывает группе: итоги дня, рекорды, заряд. */
-export type FriendInfo = {
-  /** Заряд телефона, %; null — неизвестен */
-  bat: number | null;
-  /** Телефон заряжается */
-  chg: boolean;
-  day: FriendDay | null;
-  rec: FriendRecords | null;
-  /** Сколько ступеней каждой категории достижений получено; нет у версий до 1.0.4 */
-  ach: AchievementLevels | null;
 };
 
 /** Точка встречи группы. */
@@ -329,48 +290,6 @@ async function syncPics(group: Group, reply: ListReply) {
   } finally {
     picsBusy = false;
   }
-}
-
-const num = (v: unknown): number => (typeof v === 'number' && isFinite(v) ? v : 0);
-
-function readInfo(raw: Partial<FriendInfo> | null): FriendInfo | null {
-  if (!raw) return null;
-  const day = raw.day && typeof raw.day.date === 'string' ? raw.day : null;
-  const rec = raw.rec ?? null;
-  return {
-    bat: typeof raw.bat === 'number' ? Math.max(0, Math.min(100, Math.round(raw.bat))) : null,
-    chg: raw.chg === true,
-    day: day
-      ? {
-          date: day.date,
-          runs: num(day.runs),
-          vertical: num(day.vertical),
-          distance: num(day.distance),
-          maxSpeed: num(day.maxSpeed),
-          runTime: num(day.runTime),
-          longest: num(day.longest),
-        }
-      : null,
-    rec: rec
-      ? {
-          maxSpeed: num(rec.maxSpeed),
-          longestRun: num(rec.longestRun),
-          biggestRunVertical: num(rec.biggestRunVertical),
-          dayVertical: num(rec.dayVertical),
-        }
-      : null,
-    ach: readLevels(raw.ach),
-  };
-}
-
-function readLevels(raw: unknown): AchievementLevels | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const out: AchievementLevels = {};
-  for (const c of CATEGORIES) {
-    const v = (raw as Record<string, unknown>)[c.id];
-    if (typeof v === 'number' && isFinite(v)) out[c.id] = Math.max(0, Math.min(c.levels.length, Math.round(v)));
-  }
-  return out;
 }
 
 /** Напоминания о встрече: за 20 минут и в само время */

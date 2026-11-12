@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dayKey } from '@/lib/friends/info';
-import type { Member } from '@/lib/friends/store';
+import type { FriendInfo, Member } from '@/lib/friends/store';
 import { ago } from '@/lib/friends/codec';
 import { distance, int, kmh, span } from '@/lib/format';
 import { relativeLong, type Relative } from '@/lib/relative';
@@ -32,16 +32,22 @@ type Props = {
   /** Файлы аватарки и баннера; '' — нет */
   avatar?: string;
   banner?: string;
+  /**
+   * Своя карточка: сводка собрана прямо на телефоне, а не взята с сервера.
+   * 'loading' — ещё собирается. hidden — показ итогов группе выключен в настройках.
+   */
+  own?: { info: FriendInfo | null | 'loading'; hidden: boolean };
 };
 
 const firstLetter = (name: string) => (Array.from(name.trim())[0] ?? '?').toUpperCase();
 
 /** Карточка участника группы: итоги дня, рекорды, где он и сколько заряда. */
-export function FriendCard({ member, color, status, age, where, onShowOnMap, onClose, now, avatar = '', banner = '' }: Props) {
+export function FriendCard({ member, color, status, age, where, onShowOnMap, onClose, now, avatar = '', banner = '', own }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   if (!member) return null;
-  const info = member.info;
+  const loading = own?.info === 'loading';
+  const info = own ? (own.info === 'loading' ? null : own.info) : member.info;
   const today = info?.day && info.day.date === dayKey(now) ? info.day : null;
 
   const todayItems: StatItem[] = today
@@ -115,11 +121,23 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
             ) : null}
           </View>
 
-          {!info ? (
+          {own ? (
             <Text style={[styles.note, { color: t.sub }]}>
-              {member.infoAt > 0
-                ? 'Человек скрыл свои итоги и рекорды.'
-                : 'Итоги и рекорды появятся, когда человек откроет Snowwy версии 1.0.4 или новее.'}
+              {own.hidden
+                ? 'Так выглядит ваша карточка. Сейчас друзья видят в ней только имя, место и картинки: итоги, рекорды, заряд и значки скрыты в настройках.'
+                : 'Так вашу карточку видят друзья в группе.'}
+            </Text>
+          ) : null}
+
+          {loading ? (
+            <Text style={[styles.note, { color: t.sub }]}>Собираю итоги…</Text>
+          ) : !info ? (
+            <Text style={[styles.note, { color: t.sub }]}>
+              {own
+                ? 'Пока нет ни одного дня катания.'
+                : member.infoAt > 0
+                  ? 'Человек скрыл свои итоги и рекорды.'
+                  : 'Итоги и рекорды появятся, когда человек откроет Snowwy версии 1.0.4 или новее.'}
             </Text>
           ) : (
             <>

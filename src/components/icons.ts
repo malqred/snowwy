@@ -52,11 +52,13 @@ import BatteryCharging from 'lucide-react-native/icons/battery-charging';
 import FolderOpen from 'lucide-react-native/icons/folder-open';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import Minus from 'lucide-react-native/icons/minus';
+import IdCard from 'lucide-react-native/icons/id-card';
 import Plus from 'lucide-react-native/icons/plus';
 
 export type { LucideIcon as IconType } from 'lucide-react-native';
 
 export {
+  IdCard,
   Minus,
   Plus,
   RefreshCw,
