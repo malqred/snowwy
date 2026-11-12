@@ -410,7 +410,7 @@ export default function FriendsScreen() {
               <View style={styles.side}>
                 <Text style={[styles.age, { color: t.sub }]}>{m.at > 0 ? ago(age) : '—'}</Text>
                 {bat != null ? (
-                  <Battery level={bat} charging={m.info?.chg} height={22} />
+                  <Battery level={bat} charging={m.info?.chg} height={16} />
                 ) : null}
               </View>
               {group.admin && !m.me ? (

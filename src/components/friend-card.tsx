@@ -89,7 +89,7 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
             ) : null}
             {info?.bat != null ? (
               <View style={styles.fact}>
-                <Battery level={info.bat} charging={info.chg} height={24} />
+                <Battery level={info.bat} charging={info.chg} height={18} />
                 <Text style={[styles.factText, { color: info.bat <= 20 && !info.chg ? t.danger : t.text }]}>
                   {info.chg ? 'Заряжается' : info.bat <= 20 ? 'Телефон скоро сядет' : 'Заряд телефона'}
                 </Text>
