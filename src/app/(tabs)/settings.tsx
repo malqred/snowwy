@@ -23,6 +23,7 @@ import {
   Smartphone,
   Sun,
   Trash,
+  Trophy,
   Users,
   type IconType,
 } from '@/components/icons';
@@ -33,7 +34,7 @@ import { createSession, deleteEverything, finishSession, insertPoints, setPistes
 import { generateDemoTrack } from '@/lib/demo';
 import { dateLong, daysWord } from '@/lib/format';
 import { disconnectAccount, useAccount } from '@/lib/friends/cloudflare';
-import { setSharing, useFriends } from '@/lib/friends/store';
+import { pushFriendInfo, setSharing, useFriends } from '@/lib/friends/store';
 import { askBackground, openBackgroundSettings, powerAvailable, useBackgroundAllowed, vendorGuide } from '@/lib/power';
 import { updateSettings, useSettings, type GlassLevel, type ThemeMode } from '@/lib/settings';
 import { updatesAvailable, useUpdate } from '@/lib/update';
@@ -387,6 +388,27 @@ export default function SettingsScreen() {
             onValueChange={setSharing}
             trackColor={{ true: t.accent, false: t.line }}
             thumbColor={switchThumb(t, settings.friends)}
+          />
+        </Card>
+        <Card style={styles.switchRow}>
+          <View style={styles.switchBody}>
+            <View style={styles.rowHead}>
+              <Trophy size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              <Text style={[styles.rowTitle, { color: t.text }]}>Итоги и заряд в карточке</Text>
+            </View>
+            <Text style={[styles.rowSub, { color: t.sub }]}>
+              Участники группы видят в вашей карточке итоги сегодняшнего катания, личные рекорды и заряд телефона.
+              Сводка обновляется раз в пару минут и шифруется так же, как место.
+            </Text>
+          </View>
+          <Switch
+            value={settings.friendsStats}
+            onValueChange={(friendsStats) => {
+              updateSettings({ friendsStats });
+              pushFriendInfo().catch(() => {});
+            }}
+            trackColor={{ true: t.accent, false: t.line }}
+            thumbColor={switchThumb(t, settings.friendsStats)}
           />
         </Card>
         <Card style={styles.account}>

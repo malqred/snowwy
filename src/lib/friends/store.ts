@@ -2,6 +2,8 @@
 import * as SecureStore from 'expo-secure-store';
 import { useSyncExternalStore } from 'react';
 
+import { time } from '../format';
+import { cancelNotify, notifyLater, notifyNow } from '../notify';
 import { getSettings, updateSettings } from '../settings';
 import { ApiError, call } from './api';
 import { ensureServer } from './cloudflare';
@@ -35,6 +37,64 @@ export type Pos = {
   lon: number;
   /** ride — катается, pause — запись на паузе */
   s: 'ride' | 'pause';
+  /** Высота, м; нет у версий до 1.0.4 */
+  alt?: number;
+  /** Что делает сейчас: спуск, подъёмник или стоит */
+  st?: 'run' | 'lift' | 'stop';
+};
+
+/** Итоги дня для карточки друга. */
+export type FriendDay = {
+  /** День, к которому относятся итоги: 2026-11-12 */
+  date: string;
+  runs: number;
+  /** м */
+  vertical: number;
+  /** м */
+  distance: number;
+  /** м/с */
+  maxSpeed: number;
+  /** Время на спусках, с */
+  runTime: number;
+  /** Самый длинный спуск, м */
+  longest: number;
+};
+
+/** Личные рекорды для карточки друга. */
+export type FriendRecords = {
+  /** м/с */
+  maxSpeed: number;
+  /** м */
+  longestRun: number;
+  /** Наибольший перепад одного спуска, м */
+  biggestRunVertical: number;
+  /** Наибольший перепад за день, м */
+  dayVertical: number;
+};
+
+/** Сводка, которую человек показывает группе: итоги дня, рекорды, заряд. */
+export type FriendInfo = {
+  /** Заряд телефона, %; null — неизвестен */
+  bat: number | null;
+  /** Телефон заряжается */
+  chg: boolean;
+  day: FriendDay | null;
+  rec: FriendRecords | null;
+};
+
+/** Точка встречи группы. */
+export type Meet = {
+  /** Меняется при каждой новой точке */
+  id: number;
+  lat: number;
+  lon: number;
+  text: string;
+  /** Время встречи, мс */
+  at: number;
+  /** Кто назначил */
+  by: string;
+  byName: string;
+  mine: boolean;
 };
 
 export type Member = {
@@ -46,6 +106,10 @@ export type Member = {
   pos: Pos | null;
   /** Когда он последний раз обновлял точку (время сервера, мс); 0 — ещё ни разу */
   at: number;
+  /** Сводка: итоги дня, рекорды, заряд; null — не показывает или старая версия */
+  info: FriendInfo | null;
+  /** Когда сводка обновлялась (время сервера, мс) */
+  infoAt: number;
 };
 
 export type FriendsState = {
@@ -61,10 +125,21 @@ export type FriendsState = {
   error: string | null;
   /** Разовое сообщение: исключили из группы, группу удалили */
   notice: string | null;
+  meet: Meet | null;
+  /** Версия сервера группы: 1 — без сводок и точек встречи */
+  serverVersion: number;
 };
 
-type Saved = { name: string; group: Group | null };
-type ListReply = { now: number; owner: string; members: { id: string; name: string; pos: string; at: number }[] };
+/** Какую точку встречи телефон уже видел и какие напоминания о ней поставил */
+type MeetSeen = { id: number; notes: string[] };
+type Saved = { name: string; group: Group | null; meetSeen?: MeetSeen };
+type ListReply = {
+  v?: number;
+  now: number;
+  owner: string;
+  meet?: { blob: string; at: number; by: string } | null;
+  members: { id: string; name: string; pos: string; at: number; info?: string; infoAt?: number }[];
+};
 
 function load(): Saved {
   try {
@@ -85,7 +160,10 @@ let state: FriendsState = {
   skew: 0,
   error: null,
   notice: null,
+  meet: null,
+  serverVersion: 2,
 };
+let meetSeen: MeetSeen = saved.meetSeen ?? { id: 0, notes: [] };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<FriendsState>) {
@@ -94,12 +172,78 @@ function set(patch: Partial<FriendsState>) {
 }
 
 function persist() {
-  const data: Saved = { name: state.name, group: state.group };
+  const data: Saved = { name: state.name, group: state.group, meetSeen };
   SecureStore.setItemAsync(KEY, JSON.stringify(data), STORE).catch(() => {});
 }
 
 const nameScope = (gid: string, id: string) => `${gid}:${id}:name`;
 const posScope = (gid: string, id: string) => `${gid}:${id}:pos`;
+const infoScope = (gid: string, id: string) => `${gid}:${id}:info`;
+const meetScope = (gid: string) => `${gid}:meet`;
+
+const num = (v: unknown): number => (typeof v === 'number' && isFinite(v) ? v : 0);
+
+function readInfo(raw: Partial<FriendInfo> | null): FriendInfo | null {
+  if (!raw) return null;
+  const day = raw.day && typeof raw.day.date === 'string' ? raw.day : null;
+  const rec = raw.rec ?? null;
+  return {
+    bat: typeof raw.bat === 'number' ? Math.max(0, Math.min(100, Math.round(raw.bat))) : null,
+    chg: raw.chg === true,
+    day: day
+      ? {
+          date: day.date,
+          runs: num(day.runs),
+          vertical: num(day.vertical),
+          distance: num(day.distance),
+          maxSpeed: num(day.maxSpeed),
+          runTime: num(day.runTime),
+          longest: num(day.longest),
+        }
+      : null,
+    rec: rec
+      ? {
+          maxSpeed: num(rec.maxSpeed),
+          longestRun: num(rec.longestRun),
+          biggestRunVertical: num(rec.biggestRunVertical),
+          dayVertical: num(rec.dayVertical),
+        }
+      : null,
+  };
+}
+
+/** Напоминания о встрече: за 20 минут и в само время */
+const MEET_EARLY = 20 * 60 * 1000;
+
+/** Новая точка встречи: сообщает о ней и ставит напоминания. Отменённая — убирает их. */
+async function noticeMeet(meet: Meet | null) {
+  const id = meet?.id ?? 0;
+  if (id === meetSeen.id) return;
+  const old = meetSeen.notes;
+  meetSeen = { id, notes: [] };
+  persist();
+  old.forEach((n) => cancelNotify(n));
+  if (!meet) return;
+  const now = Date.now();
+  if (meet.at < now) return;
+  const notes: string[] = [];
+  if (!meet.mine) {
+    await notifyNow(`Встреча в ${time(meet.at)}`, `${meet.byName}: ${meet.text}`);
+  }
+  const early = meet.at - MEET_EARLY;
+  if (early - now > 60000) {
+    const n = await notifyLater('Встреча через 20 минут', meet.text, Math.round((early - now) / 1000));
+    if (n) notes.push(n);
+  }
+  const n = await notifyLater(`Пора на встречу, ${time(meet.at)}`, meet.text, Math.max(1, Math.round((meet.at - now) / 1000)));
+  if (n) notes.push(n);
+  if (meetSeen.id === id) {
+    meetSeen = { id, notes };
+    persist();
+  } else {
+    notes.forEach((x) => cancelNotify(x));
+  }
+}
 
 async function apply(group: Group, reply: ListReply) {
   const members = await Promise.all(
@@ -107,19 +251,77 @@ async function apply(group: Group, reply: ListReply) {
       const name = await unseal<{ n?: unknown }>(group.key, nameScope(group.gid, m.id), m.name);
       const pos = await unseal<Partial<Pos>>(group.key, posScope(group.gid, m.id), m.pos);
       const valid = pos && typeof pos.lat === 'number' && typeof pos.lon === 'number';
+      const info = m.info ? readInfo(await unseal<Partial<FriendInfo>>(group.key, infoScope(group.gid, m.id), m.info)) : null;
       return {
         id: m.id,
         name: typeof name?.n === 'string' && name.n ? name.n.slice(0, NAME_MAX) : 'Без имени',
         me: m.id === group.id,
         owner: m.id === reply.owner,
-        pos: valid ? { lat: pos.lat as number, lon: pos.lon as number, s: pos.s === 'pause' ? 'pause' : 'ride' } : null,
+        pos: valid
+          ? {
+              lat: pos.lat as number,
+              lon: pos.lon as number,
+              s: pos.s === 'pause' ? 'pause' : 'ride',
+              alt: typeof pos.alt === 'number' ? pos.alt : undefined,
+              st: pos.st === 'run' || pos.st === 'lift' || pos.st === 'stop' ? pos.st : undefined,
+            }
+          : null,
         at: m.at,
+        info,
+        infoAt: m.infoAt ?? 0,
       };
     })
   );
+  let meet: Meet | null = null;
+  if (reply.meet) {
+    const raw = await unseal<Partial<Meet>>(group.key, meetScope(group.gid), reply.meet.blob);
+    if (raw && typeof raw.lat === 'number' && typeof raw.lon === 'number' && typeof raw.at === 'number') {
+      meet = {
+        id: reply.meet.at,
+        lat: raw.lat,
+        lon: raw.lon,
+        text: typeof raw.text === 'string' ? raw.text.slice(0, MEET_TEXT_MAX) : '',
+        at: raw.at,
+        by: reply.meet.by,
+        byName: members.find((m) => m.id === reply.meet?.by)?.name ?? 'Кто-то из группы',
+        mine: reply.meet.by === group.id,
+      };
+    }
+  }
   // Пока шла расшифровка, из группы могли выйти
   if (state.group?.gid !== group.gid) return;
-  set({ members, syncedAt: Date.now(), skew: reply.now - Date.now(), error: null });
+  set({ members, meet, serverVersion: reply.v ?? 1, syncedAt: Date.now(), skew: reply.now - Date.now(), error: null });
+  noticeMeet(meet).catch(() => {});
+}
+
+/** Самое длинное описание точки встречи, символов */
+export const MEET_TEXT_MAX = 120;
+
+// Сводку собирает модуль, который знает про записи и заряд: так хранилище группы
+// не зависит от записи катания
+let infoProvider: ((fresh: boolean) => Promise<FriendInfo | null>) | null = null;
+/** Как часто пересчитывать сводку, мс; обновляется только если что-то изменилось */
+const INFO_EVERY = 2 * 60 * 1000;
+/** Даже если ничего не изменилось, сводку обновляем раз в столько, мс: заряд, «обновлено N минут назад» */
+const INFO_REFRESH = 15 * 60 * 1000;
+let infoSentAt = 0;
+let infoSent = '';
+
+export function setInfoProvider(provider: (fresh: boolean) => Promise<FriendInfo | null>) {
+  infoProvider = provider;
+}
+
+/** Сводка для отправки: запись, '' — убрать, undefined — отправлять нечего. */
+async function nextInfo(group: Group, force: boolean): Promise<{ blob: string; json: string } | undefined> {
+  if (!infoProvider || state.serverVersion < 2) return undefined;
+  if (!getSettings().friendsStats) return infoSent === '-' ? undefined : { blob: '', json: '-' };
+  const now = Date.now();
+  if (!force && now - infoSentAt < INFO_EVERY) return undefined;
+  const info = await infoProvider(force);
+  if (!info) return undefined;
+  const json = JSON.stringify(info);
+  if (!force && json === infoSent && now - infoSentAt < INFO_REFRESH) return undefined;
+  return { blob: await seal(group.key, infoScope(group.gid, group.id), info), json };
 }
 
 /** Группы больше нет или меня из неё убрали: забываем её на телефоне. */
@@ -127,7 +329,11 @@ function drop(notice: string | null) {
   lastSentAt = 0;
   clearPending = false;
   failures = 0;
-  set({ group: null, members: [], syncedAt: 0, error: null, notice });
+  infoSent = '';
+  infoSentAt = 0;
+  meetSeen.notes.forEach((n) => cancelNotify(n));
+  meetSeen = { id: 0, notes: [] };
+  set({ group: null, members: [], meet: null, syncedAt: 0, error: null, notice });
   persist();
 }
 
@@ -146,6 +352,8 @@ type SyncOptions = {
   /** Точка для отправки; null — убрать себя с карты; не указано — только прочитать */
   pos?: Pos | null;
   name?: string;
+  /** Отправить сводку, даже если недавно отправляли */
+  info?: boolean;
 };
 
 function sync(options: SyncOptions = {}): Promise<void> {
@@ -162,10 +370,16 @@ function sync(options: SyncOptions = {}): Promise<void> {
       if (options.name !== undefined) {
         body.name = await seal(group.key, nameScope(group.gid, group.id), { n: options.name });
       }
+      const info = await nextInfo(group, options.info === true);
+      if (info) body.info = info.blob;
       // Три короткие попытки вместо одной долгой: оборванный запрос обычно проходит со второго раза,
       // и всё вместе укладывается в промежуток между обновлениями
       const reply = await call<ListReply>(group.url, body, 2, 7000);
       if (pos === null) clearPending = false;
+      if (info) {
+        infoSent = info.json;
+        infoSentAt = Date.now();
+      }
       failures = 0;
       await apply(group, reply);
     } catch (e) {
@@ -196,6 +410,46 @@ function sync(options: SyncOptions = {}): Promise<void> {
 /** Обновляет список участников (для открытой вкладки «Друзья»). */
 export function refreshFriends(): Promise<void> {
   return sync();
+}
+
+/** Сразу отправляет свежую сводку (после катания, при смене настройки). */
+export function pushFriendInfo(): Promise<void> {
+  if (!state.group) return Promise.resolve();
+  return sync({ info: true });
+}
+
+/** Ошибка старого сервера группы: он не знает новых действий. */
+function oldServer(e: unknown): boolean {
+  return e instanceof ApiError && e.code === 'bad' && state.serverVersion < 2;
+}
+
+export class OldServerError extends Error {}
+
+/** Назначает точку встречи для всей группы. Бросает ApiError или OldServerError. */
+export async function createMeet(point: { lat: number; lon: number; text: string; at: number }): Promise<void> {
+  const group = state.group;
+  if (!group) return;
+  const meet = await seal(group.key, meetScope(group.gid), {
+    lat: Math.round(point.lat * 1e5) / 1e5,
+    lon: Math.round(point.lon * 1e5) / 1e5,
+    text: point.text.trim().slice(0, MEET_TEXT_MAX),
+    at: point.at,
+  });
+  try {
+    const reply = await call<ListReply>(group.url, { op: 'meet', gid: group.gid, id: group.id, token: group.token, meet });
+    await apply(group, reply);
+  } catch (e) {
+    if (oldServer(e)) throw new OldServerError();
+    throw e;
+  }
+}
+
+/** Отменяет точку встречи. Бросает ApiError. */
+export async function cancelMeet(): Promise<void> {
+  const group = state.group;
+  if (!group) return;
+  const reply = await call<ListReply>(group.url, { op: 'meet', gid: group.gid, id: group.id, token: group.token, meet: '' });
+  await apply(group, reply);
 }
 
 /** Сохраняет моё имя; если я в группе — сообщает его остальным. */
@@ -312,25 +566,28 @@ export function setSharing(on: boolean) {
 
 const round = (v: number) => Math.round(v * 1e5) / 1e5;
 
+/** Что сейчас делает человек — для карточки и списка. */
+export type RideState = 'run' | 'lift' | 'stop';
+
 /** Вызывается на каждой новой точке записи: раз в полминуты отправляет её группе. */
-export function shareTick(point: { lat: number; lon: number }) {
+export function shareTick(point: { lat: number; lon: number; alt: number }, st: RideState) {
   if (!state.group || !getSettings().friends) return;
   const now = Date.now();
   if (now - lastSentAt < SYNC_EVERY) return;
   lastSentAt = now;
   clearPending = false;
-  sync({ pos: { lat: round(point.lat), lon: round(point.lon), s: 'ride' } });
+  sync({ pos: { lat: round(point.lat), lon: round(point.lon), s: 'ride', alt: Math.round(point.alt), st } });
 }
 
 /** Запись поставили на паузу: остальные видят последнее место с пометкой «на паузе». */
-export function sharePause(point: { lat: number; lon: number } | null) {
+export function sharePause(point: { lat: number; lon: number; alt: number } | null) {
   if (!state.group || !getSettings().friends || !point) return;
   lastSentAt = 0;
   clearPending = false;
-  sync({ pos: { lat: round(point.lat), lon: round(point.lon), s: 'pause' } });
+  sync({ pos: { lat: round(point.lat), lon: round(point.lon), s: 'pause', alt: Math.round(point.alt), st: 'stop' } });
 }
 
-/** Катание завершено: убираем себя с карты у остальных. */
+/** Катание завершено: убираем себя с карты у остальных. Итоги дня отправит pushFriendInfo. */
 export function shareStop() {
   lastSentAt = 0;
   if (!state.group) return;

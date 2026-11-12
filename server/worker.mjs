@@ -1,23 +1,26 @@
 /**
  * Посредник для вкладки «Друзья» в Snowwy. Cloudflare Worker + база D1.
  *
- * Хранит для каждой группы список участников и последнюю точку каждого.
- * Имена и точки приходят уже зашифрованными на телефоне: ключа шифрования
- * здесь нет, прочитать их посредник не может. Вместо паролей хранятся их хэши.
+ * Хранит для каждой группы список участников, последнюю точку и сводку каждого
+ * (итоги дня, рекорды, заряд) и точку встречи. Всё это приходит уже зашифрованным
+ * на телефоне: ключа шифрования здесь нет, прочитать записи посредник не может.
+ * Вместо паролей хранятся их хэши.
  *
  * Приложение само размещает этот файл в аккаунте создателя группы.
  * После правки запустите `node scripts/embed-worker.mjs` и увеличьте VERSION.
  */
-const VERSION = 1;
+const VERSION = 2;
 
 /** Самое длинное тело запроса, байт */
 const MAX_BODY = 4096;
-/** Самая длинная зашифрованная запись (имя или точка), символов */
-const MAX_BLOB = 700;
+/** Самая длинная зашифрованная запись (имя, точка, сводка, точка встречи), символов */
+const MAX_BLOB = 1400;
 const MAX_MEMBERS = 50;
 const MAX_GROUPS = 20;
 /** Точку старше этого не отдаём: человек давно не на склоне, мс */
 const POS_TTL = 12 * 3600 * 1000;
+/** Сводку старше этого не отдаём: итоги дня устарели, мс */
+const INFO_TTL = 36 * 3600 * 1000;
 
 const ID = /^[A-Za-z0-9_-]{8,64}$/;
 const SECRET = /^[A-Za-z0-9_-]{16,128}$/;
@@ -45,7 +48,16 @@ async function sha(text) {
 
 let ready = false;
 
-/** Таблицы создаются при первом запросе. */
+/** Столбцы, появившиеся во второй версии: в базах первой их добавляем. */
+const ADDED = [
+  ['member', 'info', "TEXT NOT NULL DEFAULT ''"],
+  ['member', 'infoAt', 'INTEGER NOT NULL DEFAULT 0'],
+  ['grp', 'meet', "TEXT NOT NULL DEFAULT ''"],
+  ['grp', 'meetAt', 'INTEGER NOT NULL DEFAULT 0'],
+  ['grp', 'meetBy', "TEXT NOT NULL DEFAULT ''"],
+];
+
+/** Таблицы создаются при первом запросе, недостающие столбцы добавляются. */
 async function prepare(db) {
   if (ready) return;
   await db.batch([
@@ -56,19 +68,36 @@ async function prepare(db) {
       "CREATE TABLE IF NOT EXISTS member (gid TEXT NOT NULL, id TEXT NOT NULL, token TEXT NOT NULL, name TEXT NOT NULL, pos TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL DEFAULT 0, joined INTEGER NOT NULL, PRIMARY KEY (gid, id))"
     ),
   ]);
+  for (const table of ['member', 'grp']) {
+    const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
+    const have = new Set(results.map((c) => c.name));
+    for (const [t, column, type] of ADDED) {
+      if (t === table && !have.has(column)) await db.prepare(`ALTER TABLE ${t} ADD COLUMN ${column} ${type}`).run();
+    }
+  }
   ready = true;
 }
 
-/** Ответ со списком участников группы. */
+/** Ответ со списком участников группы и точкой встречи. */
 async function list(db, gid, owner, now) {
   const { results } = await db
-    .prepare('SELECT id, name, pos, at FROM member WHERE gid = ? ORDER BY joined, id')
+    .prepare('SELECT id, name, pos, at, info, infoAt FROM member WHERE gid = ? ORDER BY joined, id')
     .bind(gid)
     .all();
+  const g = await db.prepare('SELECT meet, meetAt, meetBy FROM grp WHERE id = ?').bind(gid).first();
   return json({
+    v: VERSION,
     now,
     owner,
-    members: results.map((m) => ({ id: m.id, name: m.name, pos: m.at > now - POS_TTL ? m.pos : '', at: m.at })),
+    meet: g && g.meet ? { blob: g.meet, at: g.meetAt, by: g.meetBy } : null,
+    members: results.map((m) => ({
+      id: m.id,
+      name: m.name,
+      pos: m.at > now - POS_TTL ? m.pos : '',
+      at: m.at,
+      info: m.infoAt > now - INFO_TTL ? m.info : '',
+      infoAt: m.infoAt,
+    })),
   });
 }
 
@@ -164,6 +193,27 @@ async function handle(request, env) {
       if (b.name !== undefined) {
         if (!isBlob(b.name)) return fail('bad', 400);
         await db.prepare('UPDATE member SET name = ? WHERE gid = ? AND id = ?').bind(b.name, b.gid, b.id).run();
+      }
+      // Сводка: итоги дня, рекорды, заряд телефона
+      if (b.info !== undefined) {
+        if (b.info !== '' && !isBlob(b.info)) return fail('bad', 400);
+        await db.prepare('UPDATE member SET info = ?, infoAt = ? WHERE gid = ? AND id = ?').bind(b.info, now, b.gid, b.id).run();
+      }
+      return list(db, b.gid, who.owner, now);
+    }
+
+    // Назначить точку встречи (meet — зашифрованная запись) или отменить её (meet = '').
+    // Назначить может любой участник, отменить — тот, кто назначил, или создатель группы.
+    case 'meet': {
+      const who = await member(db, b);
+      if (who.error) return who.error;
+      if (b.meet === '') {
+        const g = await db.prepare('SELECT meetBy FROM grp WHERE id = ?').bind(b.gid).first();
+        if (g.meetBy && g.meetBy !== b.id && who.owner !== b.id) return fail('auth', 403);
+        await db.prepare("UPDATE grp SET meet = '', meetAt = ?, meetBy = '' WHERE id = ?").bind(now, b.gid).run();
+      } else {
+        if (!isBlob(b.meet)) return fail('bad', 400);
+        await db.prepare('UPDATE grp SET meet = ?, meetAt = ?, meetBy = ? WHERE id = ?').bind(b.meet, now, b.id, b.gid).run();
       }
       return list(db, b.gid, who.owner, now);
     }

@@ -8,6 +8,7 @@ import {
   Map,
   NativeUserLocation,
   RasterSource,
+  ViewAnnotation,
   type CameraRef,
   type MapProps,
 } from '@maplibre/maplibre-react-native';
@@ -17,7 +18,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { updateSettings, useSettings } from '@/lib/settings';
 import { useTheme } from '@/theme';
 
-import type { MapPin, Props } from './track-map';
+import { MeetFlag, type MapPin, type Props } from './track-map';
 
 export type { MapPin } from './track-map';
 
@@ -61,7 +62,7 @@ LogManager.onLog(({ tag, message }) => {
 type Feature = GeoJSON.Feature<GeoJSON.Geometry, Record<string, string | number | boolean>>;
 const collection = (features: Feature[]): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features });
 
-export function TrackMap({ lines, pins, focus, live = false, marker, style }: Props) {
+export function TrackMap({ lines, pins, focus, live = false, marker, meet, onPress, style }: Props) {
   const t = useTheme();
   const camera = useRef<CameraRef>(null);
   const [satellite, setSatellite] = useState(false);
@@ -71,10 +72,13 @@ export function TrackMap({ lines, pins, focus, live = false, marker, style }: Pr
   // Показываем весь трек, когда карта готова или сменился набор линий
   const signature = live
     ? 'live'
-    : `${lines.length}:${lines[0]?.id}:${lines[0]?.coords.length ?? 0}:${lines[lines.length - 1]?.id}:${(pins ?? []).map((p) => p.id).join()}`;
+    : `${lines.length}:${lines[0]?.id}:${lines[0]?.coords.length ?? 0}:${lines[lines.length - 1]?.id}:${(pins ?? []).map((p) => p.id).join()}:${meet ? 1 : 0}`;
   useEffect(() => {
     if (!ready || live) return;
-    const all = lines.flatMap((l) => l.coords).concat((pins ?? []).map((p) => p.coord));
+    const all = lines
+      .flatMap((l) => l.coords)
+      .concat((pins ?? []).map((p) => p.coord))
+      .concat(meet && !onPress ? [meet] : []);
     if (all.length === 0) return;
     let west = 180;
     let east = -180;
@@ -166,6 +170,7 @@ export function TrackMap({ lines, pins, focus, live = false, marker, style }: Pr
         logo={false}
         attribution
         attributionPosition={{ bottom: 6, right: 6 }}
+        onPress={onPress ? (e) => onPress({ latitude: e.nativeEvent.lngLat[1], longitude: e.nativeEvent.lngLat[0] }) : undefined}
         onDidFinishLoadingMap={() => setReady(true)}>
         <Camera
           ref={camera}
@@ -224,6 +229,12 @@ export function TrackMap({ lines, pins, focus, live = false, marker, style }: Pr
             paint={{ 'text-color': '#FFFFFF' }}
           />
         </GeoJSONSource>
+
+        {meet ? (
+          <ViewAnnotation id="snowwy-meet" lngLat={[meet.longitude, meet.latitude]} anchor="bottom">
+            <MeetFlag />
+          </ViewAnnotation>
+        ) : null}
 
         <GeoJSONSource id="snowwy-marker" data={markerData}>
           <Layer

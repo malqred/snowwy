@@ -5,13 +5,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Field } from '@/components/field';
 import { Prompt } from '@/components/prompt';
-import { LogOut, MapPin, Pencil, QrCode, ScanLine, Trash, UserMinus, Users } from '@/components/icons';
+import { FriendCard } from '@/components/friend-card';
+import { Flag, LogOut, MapPin, Pencil, QrCode, ScanLine, Trash, UserMinus, Users } from '@/components/icons';
 import { TrackMap, type MapPin as Pin } from '@/components/track-map';
 import { Button, Card, ICON_STROKE, Label, Screen, switchThumb, Title } from '@/components/ui';
 import { ApiError, errorText } from '@/lib/friends/api';
-import { useAccount } from '@/lib/friends/cloudflare';
+import { upgradeServer, useAccount } from '@/lib/friends/cloudflare';
 import { ago } from '@/lib/friends/codec';
 import {
+  cancelMeet,
   clearFriendsNotice,
   createGroup,
   getFriends,
@@ -25,7 +27,9 @@ import {
   useFriends,
   type Member,
 } from '@/lib/friends/store';
-import { plural } from '@/lib/format';
+import { inTime, plural, time } from '@/lib/format';
+import { ensureNotifyPermission } from '@/lib/notify';
+import { relative, relativeShort, useMySpot } from '@/lib/relative';
 import { useSettings } from '@/lib/settings';
 import { useTracker } from '@/lib/tracker';
 import { space, useTheme } from '@/theme';
@@ -43,8 +47,14 @@ const letter = (name: string) => (Array.from(name.trim())[0] ?? '?').toUpperCase
 function status(m: Member, age: number): string {
   if (!m.pos) return 'не на склоне';
   if (age > STALE) return 'нет связи';
-  return m.pos.s === 'pause' ? 'на паузе' : 'катается';
+  if (m.pos.s === 'pause') return 'на паузе';
+  if (m.pos.st === 'lift') return 'на подъёмнике';
+  if (m.pos.st === 'run') return 'на спуске';
+  return 'катается';
 }
+
+/** Встреча ещё актуальна: показываем её час после назначенного времени */
+const MEET_SHOWN = 60 * 60 * 1000;
 
 export default function FriendsScreen() {
   const t = useTheme();
@@ -60,9 +70,11 @@ export default function FriendsScreen() {
   const [focus, setFocus] = useState<{ coord: Pin['coord']; n: number } | null>(null);
   const triedAt = useRef(0);
   const [renaming, setRenaming] = useState(false);
+  const [opened, setOpened] = useState<string | null>(null);
 
   const { group, members } = friends;
   const inGroup = group != null;
+  const me = useMySpot(inGroup);
 
   // Пока вкладка открыта, список обновляется раз в полминуты, а «20 с назад» — каждые 5 секунд
   useFocusEffect(
@@ -80,6 +92,14 @@ export default function FriendsScreen() {
       triedAt.current = 0;
       tick();
       const timer = setInterval(tick, 5000);
+      // Без разрешения на уведомления не придут напоминания о встречах
+      ensureNotifyPermission();
+      // Создатель группы обновляет её сервер, если в приложении более новая версия
+      if (getFriends().group?.admin) {
+        upgradeServer().then((fresh) => {
+          if (fresh && getFriends().serverVersion < 2) refreshFriends();
+        });
+      }
       return () => clearInterval(timer);
     }, [inGroup])
   );
@@ -236,6 +256,27 @@ export default function FriendsScreen() {
       dim: r.age > STALE,
     }));
 
+  const showOnMap = (m: Member) => {
+    if (!m.pos) return;
+    setFocus((f) => ({ coord: { latitude: m.pos!.lat, longitude: m.pos!.lon }, n: (f?.n ?? 0) + 1 }));
+  };
+  const whereIs = (m: Member) =>
+    me && m.pos && !m.me ? relative(me, { lat: m.pos.lat, lon: m.pos.lon, alt: m.pos.alt }) : null;
+
+  const meet = friends.meet && friends.meet.at > serverNow - MEET_SHOWN ? friends.meet : null;
+  const canCancel = meet != null && (meet.mine || group.admin != null);
+  const dropMeet = () => {
+    Alert.alert('Отменить встречу?', 'Точка встречи исчезнет у всех в группе.', [
+      { text: 'Нет', style: 'cancel' },
+      {
+        text: 'Отменить встречу',
+        style: 'destructive',
+        onPress: () => cancelMeet().catch((e) => Alert.alert('Не получилось', errorText(e))),
+      },
+    ]);
+  };
+  const openedRow = rows.find((r) => r.m.id === opened) ?? null;
+
   const sharing = settings.friends;
   const mine = !sharing
     ? 'Группа вас не видит.'
@@ -250,7 +291,13 @@ export default function FriendsScreen() {
       <Title>Друзья</Title>
 
       <View>
-        <TrackMap lines={[]} pins={pins} focus={focus} style={styles.map} />
+        <TrackMap
+          lines={[]}
+          pins={pins}
+          focus={focus}
+          meet={meet ? { latitude: meet.lat, longitude: meet.lon } : null}
+          style={styles.map}
+        />
         {pins.length === 0 ? (
           <View style={styles.empty} pointerEvents="none">
             <Card style={styles.emptyCard}>
@@ -263,6 +310,43 @@ export default function FriendsScreen() {
       </View>
 
       {friends.error ? <Text style={[styles.note, { color: t.danger }]}>{friends.error}</Text> : null}
+
+      <View style={styles.section}>
+        {meet ? (
+          <Card style={styles.pad}>
+            <View style={styles.rowHead}>
+              <Flag size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              <Text style={[styles.rowTitle, { color: t.text }]}>
+                Встреча в {time(meet.at)} · {meet.at > serverNow ? inTime(meet.at - serverNow) : 'уже прошла'}
+              </Text>
+            </View>
+            <Text style={[styles.text, { color: t.text }]}>{meet.text}</Text>
+            <Text style={[styles.note, { color: t.sub }]}>
+              Назначено: {meet.mine ? 'вы' : meet.byName}
+              {me ? ` · ${relativeShort(relative(me, { lat: meet.lat, lon: meet.lon }))}` : ''}
+            </Text>
+            <View style={styles.meetActions}>
+              <Pressable
+                onPress={() => setFocus((f) => ({ coord: { latitude: meet.lat, longitude: meet.lon }, n: (f?.n ?? 0) + 1 }))}
+                hitSlop={8}
+                accessibilityRole="button">
+                <Text style={[styles.link, { color: t.text }]}>Показать на карте</Text>
+              </Pressable>
+              {canCancel ? (
+                <Pressable onPress={dropMeet} hitSlop={8} accessibilityRole="button">
+                  <Text style={[styles.link, { color: t.danger }]}>Отменить</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </Card>
+        ) : null}
+        <Button
+          title={meet ? 'Назначить другую встречу' : 'Назначить встречу'}
+          kind="secondary"
+          icon={Flag}
+          onPress={() => router.push('/friends/meet')}
+        />
+      </View>
 
       <Card style={styles.switchRow}>
         <View style={styles.switchBody}>
@@ -281,18 +365,30 @@ export default function FriendsScreen() {
         <Label icon={Users}>
           {members.length > 0 ? `В группе ${members.length} ${peopleWord(members.length)}` : 'Группа'}
         </Label>
-        {rows.map(({ m, age, color }) => (
+        {rows.map(({ m, age, color }) => {
+          const where = whereIs(m);
+          const bat = m.info?.bat;
+          const low = bat != null && bat <= 15 && !m.info?.chg;
+          return (
           <Pressable
             key={m.id}
-            disabled={!m.pos}
-            onPress={() =>
-              m.pos &&
-              setFocus((f) => ({ coord: { latitude: m.pos!.lat, longitude: m.pos!.lon }, n: (f?.n ?? 0) + 1 }))
-            }
+            onPress={() => setOpened(m.id)}
             accessibilityRole="button"
-            accessibilityLabel={`${m.name}, ${status(m, age)}`}
+            accessibilityLabel={`${m.name}, ${status(m, age)}. Открыть карточку`}
             style={({ pressed }) => pressed && { opacity: 0.6 }}>
             <Card style={styles.member}>
+              <Pressable
+                onPress={() => showOnMap(m)}
+                disabled={!m.pos}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`Показать ${m.name} на карте`}
+                style={({ pressed }) => [
+                  styles.onMap,
+                  { borderColor: t.line, opacity: m.pos ? (pressed ? 0.5 : 1) : 0.3 },
+                ]}>
+                <MapPin size={18} color={t.text} strokeWidth={ICON_STROKE} />
+              </Pressable>
               <View style={[styles.avatar, { backgroundColor: color, opacity: m.pos && age <= STALE ? 1 : 0.45 }]}>
                 <Text style={styles.avatarText}>{letter(m.name)}</Text>
               </View>
@@ -305,8 +401,21 @@ export default function FriendsScreen() {
                   {m.owner ? 'создатель · ' : ''}
                   {status(m, age)}
                 </Text>
+                {where ? (
+                  <Text style={[styles.memberSub, { color: t.text }]} numberOfLines={1}>
+                    {relativeShort(where)}
+                  </Text>
+                ) : null}
               </View>
-              <Text style={[styles.age, { color: t.sub }]}>{m.at > 0 ? ago(age) : '—'}</Text>
+              <View style={styles.side}>
+                <Text style={[styles.age, { color: t.sub }]}>{m.at > 0 ? ago(age) : '—'}</Text>
+                {bat != null ? (
+                  <Text style={[styles.battery, { color: low ? t.danger : t.sub }]}>
+                    {m.info?.chg ? '⚡' : ''}
+                    {bat}%
+                  </Text>
+                ) : null}
+              </View>
               {group.admin && !m.me ? (
                 <Pressable
                   onPress={() => kick(m)}
@@ -319,9 +428,11 @@ export default function FriendsScreen() {
               ) : null}
             </Card>
           </Pressable>
-        ))}
+          );
+        })}
         <Text style={[styles.note, { color: t.sub }]}>
-          Справа — сколько прошло с последнего обновления места. Нажмите на человека, чтобы найти его на карте.
+          Нажмите на человека — откроется его карточка с итогами дня и рекордами. Значок слева показывает его на карте.
+          Справа — сколько прошло с последнего обновления места и заряд телефона.
         </Text>
       </View>
 
@@ -337,6 +448,18 @@ export default function FriendsScreen() {
           onPress={leave}
         />
       </View>
+      {openedRow ? (
+        <FriendCard
+          member={openedRow.m}
+          color={openedRow.color}
+          status={status(openedRow.m, openedRow.age)}
+          age={openedRow.age}
+          where={whereIs(openedRow.m)}
+          onShowOnMap={openedRow.m.pos ? () => showOnMap(openedRow.m) : null}
+          onClose={() => setOpened(null)}
+          now={now}
+        />
+      ) : null}
       <Prompt
         visible={renaming}
         title="Ваше имя"
@@ -375,4 +498,15 @@ const styles = StyleSheet.create({
   memberSub: { fontSize: 13 },
   age: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   kick: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  onMap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  side: { alignItems: 'flex-end', gap: 2 },
+  battery: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  meetActions: { flexDirection: 'row', gap: space.l, marginTop: 4 },
 });

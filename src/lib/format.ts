@@ -52,6 +52,15 @@ export function span(seconds: number): string {
   return m === 0 ? `${h} ч` : `${h} ч ${m} мин`;
 }
 
+/** «через 25 мин», «через 1 ч 10 мин» */
+export function inTime(ms: number): string {
+  const total = Math.round(ms / 60000);
+  if (total <= 0) return 'сейчас';
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h === 0 ? `через ${m} мин` : m === 0 ? `через ${h} ч` : `через ${h} ч ${m} мин`;
+}
+
 /** Время суток: 10:42. */
 export function time(ts: number): string {
   const d = new Date(ts);

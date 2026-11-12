@@ -351,6 +351,34 @@ export async function ensureServer(onStep: (text: string) => void = () => {}): P
   return server;
 }
 
+/** Сервер старее, чем код в приложении, — его стоит обновить. */
+export function serverOutdated(): boolean {
+  return server != null && server.version < WORKER_VERSION;
+}
+
+let upgrading: Promise<boolean> | null = null;
+
+/**
+ * Обновляет сервер своей группы до версии из приложения: так у всех появляются новые
+ * возможности. Нужен подключённый аккаунт Cloudflare. Возвращает true, если сервер свежий.
+ */
+export function upgradeServer(): Promise<boolean> {
+  if (!serverOutdated()) return Promise.resolve(true);
+  if (!account || !server || account.accountId !== server.accountId) return Promise.resolve(false);
+  const { token, accountId } = account;
+  const old = server;
+  upgrading ??= deploy(token, accountId, old, () => {})
+    .then(async ({ server: next }) => {
+      await saveServer(next);
+      return true;
+    })
+    .catch(() => false)
+    .finally(() => {
+      upgrading = null;
+    });
+  return upgrading;
+}
+
 /** Выход: приложение забывает ключ доступа. Посредник и группы продолжают работать. */
 export async function disconnectAccount(): Promise<void> {
   await saveAccount(null);

@@ -33,6 +33,10 @@ export type Props = {
   live?: boolean;
   /** Точка на треке — положение при повторе спуска */
   marker?: Coord | null;
+  /** Точка встречи группы */
+  meet?: Coord | null;
+  /** Нажатие на карту (выбор точки встречи) */
+  onPress?: (coord: Coord) => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -40,7 +44,7 @@ const PADDING = { top: 48, right: 36, bottom: 36, left: 36 };
 /** Масштаб, когда на карте одна точка: примерно километр по высоте */
 const CLOSE = { latitudeDelta: 0.012, longitudeDelta: 0.012 };
 
-export function TrackMap({ lines, pins, focus, live = false, marker, style }: Props) {
+export function TrackMap({ lines, pins, focus, live = false, marker, meet, onPress, style }: Props) {
   const t = useTheme();
   const map = useRef<MapView>(null);
   const [satellite, setSatellite] = useState(false);
@@ -50,10 +54,13 @@ export function TrackMap({ lines, pins, focus, live = false, marker, style }: Pr
   // Показываем весь трек, когда карта готова или сменился набор линий
   const signature = live
     ? 'live'
-    : `${lines.length}:${lines[0]?.id}:${lines[0]?.coords.length ?? 0}:${lines[lines.length - 1]?.id}:${(pins ?? []).map((p) => p.id).join()}`;
+    : `${lines.length}:${lines[0]?.id}:${lines[0]?.coords.length ?? 0}:${lines[lines.length - 1]?.id}:${(pins ?? []).map((p) => p.id).join()}:${meet ? 1 : 0}`;
   useEffect(() => {
     if (!ready || live) return;
-    const all = lines.flatMap((l) => l.coords).concat((pins ?? []).map((p) => p.coord));
+    const all = lines
+      .flatMap((l) => l.coords)
+      .concat((pins ?? []).map((p) => p.coord))
+      .concat(meet && !onPress ? [meet] : []);
     if (all.length > 1) map.current?.fitToCoordinates(all, { edgePadding: PADDING, animated: false });
     else if (all.length === 1) map.current?.animateToRegion({ ...all[0], ...CLOSE }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,6 +84,7 @@ export function TrackMap({ lines, pins, focus, live = false, marker, style }: Pr
         showsPointsOfInterests={false}
         pitchEnabled={false}
         rotateEnabled={false}
+        onPress={onPress ? (e) => onPress(e.nativeEvent.coordinate) : undefined}
         onMapReady={() => setReady(true)}>
         {pistes ? (
           <UrlTile urlTemplate={PISTES_URL} maximumZ={18} tileCachePath={PISTES_CACHE} tileCacheMaxAge={PISTES_MAX_AGE} />
@@ -104,6 +112,11 @@ export function TrackMap({ lines, pins, focus, live = false, marker, style }: Pr
             </View>
           </Marker>
         ))}
+        {meet ? (
+          <Marker key={`meet:${meet.latitude}:${meet.longitude}`} coordinate={meet} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+            <MeetFlag />
+          </Marker>
+        ) : null}
         {marker ? (
           <Marker coordinate={marker} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
             <View style={[styles.marker, { backgroundColor: t.text, borderColor: t.bg }]} />
@@ -138,7 +151,32 @@ export function TrackMap({ lines, pins, focus, live = false, marker, style }: Pr
   );
 }
 
+/** Метка точки встречи: флажок на ножке. */
+export function MeetFlag() {
+  return (
+    <View style={styles.meet}>
+      <View style={styles.meetHead}>
+        <Text style={styles.meetText}>⚑</Text>
+      </View>
+      <View style={styles.meetLeg} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  meet: { alignItems: 'center' },
+  meetHead: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#E5484D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  meetText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
+  meetLeg: { width: 3, height: 10, backgroundColor: '#E5484D' },
   wrap: {
     borderRadius: 18,
     borderCurve: 'continuous',

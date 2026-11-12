@@ -9,7 +9,7 @@ import { Platform } from 'react-native';
 import { analyze, EMPTY_ANALYSIS, haversine } from './analyze';
 import { autoBackup } from './backup';
 import * as db from './db';
-import { sharePause, shareStop, shareTick } from './friends/store';
+import { pushFriendInfo, sharePause, shareStop, shareTick } from './friends/store';
 import { bindRideActions, endRideActivity, startRideActivity, updateRideActivity } from './live-activity';
 import { cancelNotify, ensureNotifyPermission, notifyLater, notifyNow } from './notify';
 import { getSettings } from './settings';
@@ -242,7 +242,7 @@ function ingest(locations: Location.LocationObject[]) {
   }
   refreshActivity();
   loadWeather(last);
-  shareTick(last);
+  shareTick(last, state.analysis.state === 'run' ? 'run' : state.analysis.state === 'lift' ? 'lift' : 'stop');
   checkIdle(last);
 }
 
@@ -569,6 +569,8 @@ export async function stopRecording(endedAt?: number): Promise<number | null> {
   points = [];
   pending = [];
   set(IDLE);
+  // Группа видит итоги дня с только что законченным катанием
+  pushFriendInfo().catch(() => {});
   if (saved != null && getSettings().backup) autoBackup();
   return saved;
 }

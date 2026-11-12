@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 import { Alert, Platform } from 'react-native';
 
 import { autoBackup, chooseBackupFolder } from '@/lib/backup';
+import { syncFriendsInBackground, watchAppOpen } from '@/lib/friends/background';
+import '@/lib/friends/info';
+import { useFriends } from '@/lib/friends/store';
 import { getSettings, updateSettings } from '@/lib/settings';
 import { getTracker, recoverUnfinished } from '@/lib/tracker';
 import { checkForUpdate, skipVersion, updateCheckDue } from '@/lib/update';
@@ -12,6 +15,13 @@ import { useTheme } from '@/theme';
 export default function RootLayout() {
   const t = useTheme();
   const router = useRouter();
+  const inGroup = useFriends().group != null;
+
+  // Группа обновляется при открытии приложения и в фоне: так приходят точки встречи
+  useEffect(() => {
+    watchAppOpen();
+    syncFriendsInBackground(inGroup);
+  }, [inGroup]);
 
   // Android: раз в сутки сами проверяем, вышла ли новая версия, и один раз о ней говорим
   useEffect(() => {
@@ -92,6 +102,7 @@ export default function RootLayout() {
         <Stack.Screen name="friends/account" options={{ title: 'Аккаунт Cloudflare' }} />
         <Stack.Screen name="friends/join" options={{ title: 'Вход в группу' }} />
         <Stack.Screen name="friends/invite" options={{ title: 'Приглашение' }} />
+        <Stack.Screen name="friends/meet" options={{ title: 'Точка встречи' }} />
         <Stack.Screen name="update" options={{ title: 'Обновление' }} />
       </Stack>
     </ThemeProvider>

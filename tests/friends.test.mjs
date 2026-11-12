@@ -60,7 +60,7 @@ async function group(call) {
 
 test('посредник отвечает на проверку связи', async () => {
   const res = await worker.fetch(new Request('https://example.workers.dev/'), { DB: fakeD1(), OWNER_KEY });
-  assert.deepEqual(await res.json(), { ok: true, snowwy: 1 });
+  assert.deepEqual(await res.json(), { ok: true, snowwy: 2 });
 });
 
 test('группу создаёт только владелец аккаунта', async () => {
@@ -181,7 +181,7 @@ test('мусор в запросе отклоняется', async () => {
   const { call } = server();
   await group(call);
   const { id, token } = person(1);
-  assert.equal((await call({ op: 'sync', gid: GID, id, token, pos: 'x'.repeat(701) })).status, 400);
+  assert.equal((await call({ op: 'sync', gid: GID, id, token, pos: 'x'.repeat(1401) })).status, 400);
   assert.equal((await call({ op: 'sync', gid: GID, id, token, pos: 'не base64' })).status, 400);
   assert.equal((await call({ op: 'sync', gid: "' OR 1=1 --", id, token })).status, 400);
   assert.equal((await call({ op: 'nothing' })).status, 400);
@@ -195,6 +195,60 @@ test('в группе не больше 50 человек', async () => {
     assert.equal((await call({ op: 'join', gid: GID, invite: INVITE, ...person(n) })).status, 200);
   }
   assert.equal((await call({ op: 'join', gid: GID, invite: INVITE, ...person(51) })).body.error, 'full');
+});
+
+test('сводка участника и точка встречи', async () => {
+  const { call } = server();
+  await group(call);
+  await call({ op: 'join', gid: GID, invite: INVITE, ...person(2) });
+
+  const synced = await call({ op: 'sync', gid: GID, ...person(2), info: 'c3VtbWFyeQ' });
+  assert.equal(synced.status, 200);
+  assert.equal(synced.body.v, 2);
+  assert.equal(synced.body.members.find((m) => m.id === person(2).id).info, 'c3VtbWFyeQ');
+
+  // Встречу назначает участник, остальные видят её при следующем обмене
+  const made = await call({ op: 'meet', gid: GID, ...person(2), meet: 'bWVldA' });
+  assert.equal(made.status, 200);
+  const seen = await call({ op: 'sync', gid: GID, ...person(1) });
+  assert.equal(seen.body.meet.blob, 'bWVldA');
+  assert.equal(seen.body.meet.by, person(2).id);
+
+  // Отменить чужую встречу может только создатель группы
+  await call({ op: 'join', gid: GID, invite: INVITE, ...person(3) });
+  assert.equal((await call({ op: 'meet', gid: GID, ...person(3), meet: '' })).status, 403);
+  const cancelled = await call({ op: 'meet', gid: GID, ...person(1), meet: '' });
+  assert.equal(cancelled.status, 200);
+  assert.equal(cancelled.body.meet, null);
+
+  assert.equal((await call({ op: 'meet', gid: GID, ...person(2), meet: 'bad blob!' })).status, 400);
+});
+
+test('посредник первой версии получает новые столбцы, данные сохраняются', async () => {
+  // Отдельная копия модуля: таблицы в ней ещё не проверялись
+  const fresh = (await import('../server/worker.mjs?migrate')).default;
+  const old = new DatabaseSync(':memory:');
+  old.exec('CREATE TABLE grp (id TEXT PRIMARY KEY, admin TEXT NOT NULL, invite TEXT NOT NULL, owner TEXT NOT NULL, created INTEGER NOT NULL)');
+  old.exec(
+    "CREATE TABLE member (gid TEXT NOT NULL, id TEXT NOT NULL, token TEXT NOT NULL, name TEXT NOT NULL, pos TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL DEFAULT 0, joined INTEGER NOT NULL, PRIMARY KEY (gid, id))"
+  );
+  const statement = (sql, params = []) => ({
+    bind: (...values) => statement(sql, values),
+    first: async () => old.prepare(sql).get(...params) ?? null,
+    all: async () => ({ results: old.prepare(sql).all(...params) }),
+    run: async () => ({ meta: { changes: Number(old.prepare(sql).run(...params).changes) } }),
+  });
+  const env = { DB: { prepare: (sql) => statement(sql), batch: async (l) => Promise.all(l.map((s) => s.run())) }, OWNER_KEY };
+  const call = async (body) => {
+    const res = await fresh.fetch(new Request('https://x.workers.dev/', { method: 'POST', body: JSON.stringify(body) }), env);
+    return { status: res.status, body: await res.json() };
+  };
+  // Группа, созданная старым посредником
+  const created = await call({ op: 'create', owner: OWNER_KEY, gid: GID, admin: ADMIN, invite: INVITE, ...person(1) });
+  assert.equal(created.status, 200);
+  const columns = old.prepare('PRAGMA table_info(member)').all().map((c) => c.name);
+  assert.ok(columns.includes('info') && columns.includes('infoAt'));
+  assert.equal((await call({ op: 'meet', gid: GID, ...person(1), meet: 'bWVldA' })).body.meet.blob, 'bWVldA');
 });
 
 test('код посредника в приложении совпадает с server/worker.mjs', () => {

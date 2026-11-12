@@ -38,6 +38,8 @@ export type Settings = {
   pistes: boolean;
   /** Показывать меня группе друзей во время катания */
   friends: boolean;
+  /** Показывать группе итоги дня, рекорды и заряд телефона */
+  friendsStats: boolean;
 };
 
 const KEY = 'settings';
@@ -57,6 +59,7 @@ const DEFAULTS: Settings = {
   economy: false,
   pistes: false,
   friends: false,
+  friendsStats: true,
 };
 
 function load(): Settings {

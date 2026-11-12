@@ -18,6 +18,17 @@ const MIN_RUN_DISTANCE = 15;
 const MIN_RUN_DURATION = 4;
 /** Спуск, на котором ни разу не ехали быстрее, — это прогулка пешком, м/с */
 const MIN_RUN_TOP_SPEED = 2.5;
+/**
+ * Пологий спуск: перепад от метра, но ехали не медленнее 15 км/ч. Так считаются выкаты,
+ * пологие трассы и переезды между подъёмниками — пешком и на ковре так быстро не ездят.
+ */
+const GLIDE_SPEED = 15 / 3.6;
+const MIN_GLIDE_VERTICAL = 1;
+/** Пологий отрезок короче этого — не спуск, а случайный разгон, с и м */
+const MIN_GLIDE_DURATION = 8;
+const MIN_GLIDE_DISTANCE = 30;
+/** На сколько пологий выкат может подняться над концом спуска и всё ещё быть его частью, м */
+const GLIDE_RISE = 1.5;
 const MIN_LIFT_DURATION = 30;
 /** Ниже этой скорости считаем, что человек стоит, м/с */
 const MOVING_SPEED = 0.6;
@@ -168,6 +179,123 @@ function mergeBumps(points: TrackPoint[], alt: number[], speed: number[], legs: 
   return out;
 }
 
+/** Точка, отстоящая по времени от i на ms назад (ms < 0) или вперёд, в пределах трека. */
+function at(points: TrackPoint[], i: number, ms: number): number {
+  let j = i;
+  if (ms < 0) while (j > 0 && points[i].t - points[j - 1].t <= -ms) j--;
+  else while (j < points.length - 1 && points[j + 1].t - points[i].t <= ms) j++;
+  return j;
+}
+
+/**
+ * Провал на линии подъёмника: до и после него человек ровно едет вверх с той же скоростью.
+ * Настоящий пологий спуск после подъёмника так не выглядит — с кресла сходят, и скорость меняется.
+ */
+function isLiftDip(points: TrackPoint[], alt: number[], speed: number[], from: number, to: number): boolean {
+  const before = at(points, from, -15000);
+  const after = at(points, to, 15000);
+  if (alt[from] - alt[before] < 3 || alt[after] - alt[to] < 3) return false;
+  let min = Infinity;
+  let max = 0;
+  for (let i = before; i <= after; i++) {
+    if (speed[i] < min) min = speed[i];
+    if (speed[i] > max) max = speed[i];
+  }
+  return min > TRIM_SPEED && max - min < STEADY_SPREAD;
+}
+
+/**
+ * Пологие спуски внутри отрезка [from, to], которые зигзаг по высоте не замечает: перепад
+ * меньше REVERSAL, но едут быстро. Возвращает пары [верх, низ].
+ */
+function findGlides(points: TrackPoint[], alt: number[], speed: number[], from: number, to: number): [number, number][] {
+  const out: [number, number][] = [];
+  let i = from;
+  while (i <= to) {
+    if (speed[i] < GLIDE_SPEED) {
+      i++;
+      continue;
+    }
+    let end = i;
+    while (end + 1 <= to && speed[end + 1] >= GLIDE_SPEED) end++;
+    // Внутри быстрого отрезка может быть и конец подъёмника, и выкат: спуск — от самой
+    // высокой точки до самой низкой после неё
+    let s = i;
+    while (s < end) {
+      let top = s;
+      for (let k = s; k <= end; k++) if (alt[k] > alt[top]) top = k;
+      let low = top;
+      for (let k = top; k <= end; k++) if (alt[k] < alt[low]) low = k;
+      if (low <= top) break;
+      let flat = 0;
+      for (let k = top + 1; k <= low; k++) {
+        flat += haversine(points[k - 1].lat, points[k - 1].lon, points[k].lat, points[k].lon);
+      }
+      const seconds = (points[low].t - points[top].t) / 1000;
+      if (
+        alt[top] - alt[low] >= MIN_GLIDE_VERTICAL &&
+        seconds >= MIN_GLIDE_DURATION &&
+        flat >= MIN_GLIDE_DISTANCE &&
+        !isLiftDip(points, alt, speed, top, low)
+      ) {
+        out.push([top, low]);
+      }
+      s = low + 1;
+    }
+    i = end + 1;
+  }
+  return out;
+}
+
+/**
+ * Дополняет участки зигзага пологими спусками: продлевает спуски на быстрые выкаты в начале
+ * и в конце, а пологие спуски между подъёмами добавляет как отдельные.
+ */
+function addGlides(points: TrackPoint[], alt: number[], speed: number[], legs: Leg[]): Leg[] {
+  const n = points.length;
+  // Продлеваем спуски: на ровном выкате высота почти не меняется, поэтому зигзаг его отрезал
+  for (let k = 0; k < legs.length; k++) {
+    const leg = legs[k];
+    if (leg.dir !== -1) continue;
+    const prev = legs[k - 1];
+    const next = legs[k + 1];
+    const minFrom = prev ? prev.from + 1 : 0;
+    const top = alt[leg.from];
+    while (leg.from > minFrom && speed[leg.from - 1] >= GLIDE_SPEED && alt[leg.from - 1] >= top - GLIDE_RISE) {
+      leg.from--;
+    }
+    if (prev) prev.to = leg.from;
+    const maxTo = next ? next.to - 1 : n - 1;
+    const bottom = alt[leg.to];
+    while (leg.to < maxTo && speed[leg.to + 1] >= GLIDE_SPEED && alt[leg.to + 1] <= bottom + GLIDE_RISE) leg.to++;
+    if (next) next.from = leg.to;
+  }
+
+  // Пологие спуски там, где зигзаг спуска не нашёл: на подъёмах и вне участков
+  const out: Leg[] = [];
+  const glideLegs = (from: number, to: number, open: boolean): Leg[] =>
+    findGlides(points, alt, speed, from, to).map(([a, b]) => ({ dir: -1, from: a, to: b, open: open && b >= n - 2 }));
+  let covered = 0;
+  for (const leg of legs) {
+    if (leg.from > covered) out.push(...glideLegs(covered, leg.from, false));
+    if (leg.dir === -1) {
+      out.push(leg);
+    } else {
+      // Подъём делится пологими спусками на части
+      let start = leg.from;
+      for (const g of glideLegs(leg.from, leg.to, leg.open)) {
+        if (g.from > start) out.push({ dir: 1, from: start, to: g.from, open: false });
+        out.push(g);
+        start = g.to;
+      }
+      if (leg.to > start) out.push({ dir: 1, from: start, to: leg.to, open: leg.open });
+    }
+    covered = Math.max(covered, leg.to);
+  }
+  if (covered < n - 1) out.push(...glideLegs(covered, n - 1, true));
+  return out;
+}
+
 /** Делит участок на части по долгим остановкам и разрывам сигнала. */
 function splitByStops(points: TrackPoint[], speed: number[], from: number, to: number): [number, number][] {
   const parts: [number, number][] = [];
@@ -264,8 +392,10 @@ function buildSegment(
   const vertical = Math.abs(alt[top] - alt[bottom]);
 
   if (kind === 'run') {
-    if (vertical < MIN_RUN_VERTICAL || distance < MIN_RUN_DISTANCE || duration < MIN_RUN_DURATION) return null;
-    if (maxSpeed < MIN_RUN_TOP_SPEED) return null;
+    if (distance < MIN_RUN_DISTANCE || duration < MIN_RUN_DURATION) return null;
+    const steep = vertical >= MIN_RUN_VERTICAL && maxSpeed >= MIN_RUN_TOP_SPEED;
+    const glide = vertical >= MIN_GLIDE_VERTICAL && maxSpeed >= GLIDE_SPEED;
+    if (!steep && !glide) return null;
   } else if (vertical < MIN_LIFT_VERTICAL || duration < MIN_LIFT_DURATION) {
     return null;
   }
@@ -327,7 +457,7 @@ export function analyze(points: TrackPoint[]): Analysis {
   const speed = smooth(points, clean, 2500);
   const speedFast = smooth(points, clean, 1000);
 
-  const legs = mergeBumps(points, alt, speed, findLegs(alt));
+  const legs = addGlides(points, alt, speed, mergeBumps(points, alt, speed, findLegs(alt)));
   // Последний участок всегда незавершённый: его направление — то, что происходит сейчас
   const current = legs[legs.length - 1];
   const dir = current ? current.dir : 0;
@@ -384,7 +514,10 @@ export function analyze(points: TrackPoint[]): Analysis {
   }
 
   let state: LiveState = 'move';
+  const lastSeg = segments[segments.length - 1];
   if (speed[n - 1] < 1) state = 'pause';
+  // Едем пологим спуском, который зигзаг ещё не видит
+  else if (lastSeg?.kind === 'run' && lastSeg.open && lastSeg.to >= n - 3) state = 'run';
   else if (dir === -1 && alt[n - 1] - alt[extreme] < BUMP / 2) state = 'run';
   else if (dir === 1 && alt[extreme] - alt[n - 1] < BUMP / 2) state = 'lift';
 

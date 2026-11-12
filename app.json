@@ -2,7 +2,7 @@
   "expo": {
     "name": "Snowwy",
     "slug": "snowwy",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "snowwy",
@@ -81,7 +81,8 @@
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "experiments": {
       "reactCompiler": true

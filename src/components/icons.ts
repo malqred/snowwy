@@ -51,10 +51,14 @@ import KeyRound from 'lucide-react-native/icons/key-round';
 import BatteryCharging from 'lucide-react-native/icons/battery-charging';
 import FolderOpen from 'lucide-react-native/icons/folder-open';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
+import Minus from 'lucide-react-native/icons/minus';
+import Plus from 'lucide-react-native/icons/plus';
 
 export type { LucideIcon as IconType } from 'lucide-react-native';
 
 export {
+  Minus,
+  Plus,
   RefreshCw,
   BatteryCharging,
   FolderOpen,
