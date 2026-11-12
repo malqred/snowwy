@@ -1,4 +1,3 @@
-import { useNavigation } from 'expo-router';
 import { useRef, useState } from 'react';
 import { type GestureResponderEvent, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
@@ -62,14 +61,9 @@ export function Chart({
   // Жест начался в этой точке; «держим» его, когда палец пошёл вбок
   const touch = useRef({ x0: 0, y0: 0, held: false });
   const lockScroll = useScrollLock();
-  const navigation = useNavigation();
-  // На iPhone экран закрывается свайпом вбок из любого места — тем же движением, что и палочка.
-  // Пока палец на графике, этот жест выключен, иначе экран уезжает прямо из-под пальца.
-  const holdBack = (on: boolean) => navigation.setOptions({ gestureEnabled: !on });
   const letGo = () => {
     if (touch.current.held) lockScroll(false);
     touch.current.held = false;
-    holdBack(false);
   };
 
   const data = thin(values, 160);
@@ -130,7 +124,6 @@ export function Chart({
             touch.current.x0 = e.nativeEvent.pageX;
             touch.current.y0 = e.nativeEvent.pageY;
             touch.current.held = false;
-            holdBack(true);
             place(e);
           }}
           onResponderMove={(e) => {
@@ -144,7 +137,10 @@ export function Chart({
             place(e);
           }}
           onResponderTerminationRequest={() => !touch.current.held}
-          onResponderRelease={letGo}
+          onResponderRelease={(e) => {
+            place(e);
+            letGo();
+          }}
           onResponderTerminate={() => {
             letGo();
             setPick(null);

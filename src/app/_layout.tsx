@@ -96,8 +96,10 @@ export default function RootLayout() {
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="session/[id]/index" options={{ title: '' }} />
-        <Stack.Screen name="session/[id]/run/[n]" options={{ title: '' }} />
-        <Stack.Screen name="session/[id]/compare" options={{ title: 'Сравнение' }} />
+        {/* На этих экранах графики водят пальцем вбок. С iOS 26 экран закрывается свайпом из любого места,
+            и этот свайп перехватывал палец с графика — оставляем закрытие только от левого края */}
+        <Stack.Screen name="session/[id]/run/[n]" options={{ title: '', fullScreenGestureEnabled: false }} />
+        <Stack.Screen name="session/[id]/compare" options={{ title: 'Сравнение', fullScreenGestureEnabled: false }} />
         <Stack.Screen name="session/[id]/done" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="friends/account" options={{ title: 'Аккаунт Cloudflare' }} />
         <Stack.Screen name="friends/join" options={{ title: 'Вход в группу' }} />
