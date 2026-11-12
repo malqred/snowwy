@@ -1,5 +1,5 @@
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import type { ReactNode } from 'react';
+import { createContext, type ReactNode, useContext, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -58,9 +58,18 @@ export function Backdrop() {
   );
 }
 
+/**
+ * Остановить прокрутку экрана, пока палец что-то тащит вбок (палочка на графике).
+ * На iPhone прокрутка иначе ловит каждое дрожание пальца по вертикали и экран ездит.
+ */
+const ScrollLock = createContext<(locked: boolean) => void>(() => {});
+export const useScrollLock = () => useContext(ScrollLock);
+
 /** Экран с фоном-градиентом и прокруткой. */
-export function Screen({ children, style, ...rest }: ScrollViewProps) {
+export function Screen({ children, style, scrollEnabled = true, ...rest }: ScrollViewProps) {
+  const [locked, setLocked] = useState(false);
   return (
+    <ScrollLock.Provider value={setLocked}>
     <View style={styles.screen}>
       <Backdrop />
       {/* Когда открыта клавиатура, прокрутка сама поднимает поле ввода над ней */}
@@ -68,10 +77,12 @@ export function Screen({ children, style, ...rest }: ScrollViewProps) {
         style={[styles.screen, style]}
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
+        scrollEnabled={scrollEnabled && !locked}
         {...rest}>
         {children}
       </ScrollView>
     </View>
+    </ScrollLock.Provider>
   );
 }
 

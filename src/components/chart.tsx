@@ -7,7 +7,7 @@ import { niceScale, valueAt } from '@/lib/chart-scale';
 import { clock } from '@/lib/format';
 import { space, useTheme } from '@/theme';
 
-import { Card, Label } from './ui';
+import { Card, Label, useScrollLock } from './ui';
 
 type Props = {
   title: string;
@@ -38,7 +38,7 @@ const BUBBLE = 26;
 /** Ширина колонки с числами слева */
 const AXIS_W = 40;
 /** Сдвиг пальца по горизонтали, после которого жест считается «водим палочкой», а не прокруткой */
-const SLOP = 6;
+const SLOP = 4;
 
 /** Простой график с заливкой: значение по времени. Числа слева, палочку можно водить пальцем. */
 export function Chart({
@@ -59,7 +59,12 @@ export function Chart({
   /** Где стоит палочка: доля ширины 0..1, null — не показана */
   const [pick, setPick] = useState<number | null>(null);
   // Жест начался в этой точке; «держим» его, когда палец пошёл вбок
-  const touch = useRef({ x0: 0, held: false });
+  const touch = useRef({ x0: 0, y0: 0, held: false });
+  const lockScroll = useScrollLock();
+  const letGo = () => {
+    if (touch.current.held) lockScroll(false);
+    touch.current.held = false;
+  };
 
   const data = thin(values, 160);
   const other = second ? thin(second, 160) : [];
@@ -117,15 +122,26 @@ export function Chart({
           onMoveShouldSetResponder={() => true}
           onResponderGrant={(e) => {
             touch.current.x0 = e.nativeEvent.pageX;
+            touch.current.y0 = e.nativeEvent.pageY;
             touch.current.held = false;
             place(e);
           }}
           onResponderMove={(e) => {
-            if (Math.abs(e.nativeEvent.pageX - touch.current.x0) > SLOP) touch.current.held = true;
+            // Палец пошёл вбок — это палочка: экран больше не прокручивается до конца касания
+            const dx = Math.abs(e.nativeEvent.pageX - touch.current.x0);
+            const dy = Math.abs(e.nativeEvent.pageY - touch.current.y0);
+            if (!touch.current.held && dx > SLOP && dx > dy) {
+              touch.current.held = true;
+              lockScroll(true);
+            }
             place(e);
           }}
           onResponderTerminationRequest={() => !touch.current.held}
-          onResponderTerminate={() => setPick(null)}
+          onResponderRelease={letGo}
+          onResponderTerminate={() => {
+            letGo();
+            setPick(null);
+          }}
           accessibilityLabel={`${title}: проведите пальцем по графику, чтобы увидеть значение`}>
           <View style={{ height: BUBBLE }} pointerEvents="none">
             {pick != null && first != null ? (
