@@ -140,7 +140,7 @@ export function AchievementBadge({ category, value, index, count, locked = false
   const crystal = !locked && index >= count - 2;
 
   return (
-    <Svg width={size} height={(size * H) / W} viewBox={`0 0 ${W} ${H}`}>
+    <Svg width={size} height={(size * H) / W} viewBox={`0 0 ${W} ${H}`} opacity={locked ? 0.4 : 1}>
       <Defs>
         <LinearGradient id={`f${uid}`} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={c.top} />

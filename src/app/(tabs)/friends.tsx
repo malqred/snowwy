@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
@@ -31,6 +32,7 @@ import {
 import { inTime, plural, time } from '@/lib/format';
 import { ensureNotifyPermission } from '@/lib/notify';
 import { relative, relativeShort, useMySpot } from '@/lib/relative';
+import { useProfileImages } from '@/lib/profile';
 import { useSettings } from '@/lib/settings';
 import { useTracker } from '@/lib/tracker';
 import { space, useTheme } from '@/theme';
@@ -76,6 +78,7 @@ export default function FriendsScreen() {
   const { group, members } = friends;
   const inGroup = group != null;
   const me = useMySpot(inGroup);
+  const myImages = useProfileImages();
 
   // Пока вкладка открыта, список обновляется раз в полминуты, а «20 с назад» — каждые 5 секунд
   useFocusEffect(
@@ -390,7 +393,11 @@ export default function FriendsScreen() {
                 <MapPin size={18} color={t.text} strokeWidth={ICON_STROKE} />
               </Pressable>
               <View style={[styles.avatar, { backgroundColor: color, opacity: m.pos && age <= STALE ? 1 : 0.45 }]}>
-                <Text style={styles.avatarText}>{letter(m.name)}</Text>
+                {m.me && myImages.avatar ? (
+                  <Image source={{ uri: myImages.avatar }} style={styles.avatarImage} contentFit="cover" />
+                ) : (
+                  <Text style={styles.avatarText}>{letter(m.name)}</Text>
+                )}
               </View>
               <View style={styles.memberBody}>
                 <Text style={[styles.memberName, { color: t.text }]} numberOfLines={1}>
@@ -488,7 +495,8 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', alignItems: 'center', padding: space.m, gap: space.m },
   switchBody: { flex: 1, gap: 4 },
   member: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImage: { width: 40, height: 40 },
   avatarText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   memberBody: { flex: 1, gap: 2 },
   memberName: { fontSize: 16, fontWeight: '600' },
