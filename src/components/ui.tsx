@@ -249,7 +249,8 @@ export function StatStrip({ items }: { items: StatItem[] }) {
 type ButtonProps = {
   title: string;
   onPress: () => void;
-  kind?: 'primary' | 'secondary' | 'danger';
+  /** stop — стекло с красной рамкой: заметная, но не главная кнопка (например, «Завершить») */
+  kind?: 'primary' | 'secondary' | 'danger' | 'stop';
   icon?: IconType;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -258,7 +259,7 @@ type ButtonProps = {
 export function Button({ title, onPress, kind = 'primary', icon: Icon, disabled, style }: ButtonProps) {
   const t = useTheme();
   const filled = kind === 'primary';
-  const color = kind === 'danger' ? t.danger : filled ? t.inverse : t.text;
+  const color = kind === 'danger' || kind === 'stop' ? t.danger : filled ? t.inverse : t.text;
   const body = (
     <>
       {Icon ? <Icon size={18} color={color} strokeWidth={ICON_STROKE} /> : null}
@@ -274,7 +275,7 @@ export function Button({ title, onPress, kind = 'primary', icon: Icon, disabled,
       {filled ? (
         <View style={[styles.button, { backgroundColor: t.accent }]}>{body}</View>
       ) : (
-        <Surface style={styles.button}>{body}</Surface>
+        <Surface style={[styles.button, kind === 'stop' && { borderWidth: 2, borderColor: t.danger }]}>{body}</Surface>
       )}
     </Pressable>
   );

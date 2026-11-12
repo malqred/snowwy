@@ -221,13 +221,13 @@ export default function RideScreen() {
       <View style={styles.actions}>
         <Button
           title={paused ? 'Продолжить' : 'Пауза'}
-          kind={paused ? 'primary' : 'secondary'}
+          kind="primary"
           icon={paused ? Play : Pause}
           onPress={togglePause}
           disabled={busy}
           style={styles.action}
         />
-        <Button title="Завершить" kind="secondary" icon={Flag} onPress={stop} disabled={busy} style={styles.action} />
+        <Button title="Завершить" kind="stop" icon={Flag} onPress={stop} disabled={busy} style={styles.action} />
       </View>
 
       {paused ? (
