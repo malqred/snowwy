@@ -68,12 +68,15 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={styles.shade} onPress={onClose} accessibilityLabel="Закрыть карточку" />
       <View style={[styles.sheet, { backgroundColor: t.bg, borderColor: t.line, paddingBottom: insets.bottom + space.m }]}>
-        {banner ? (
-          <Image source={{ uri: banner }} style={styles.banner} contentFit="cover" transition={150} />
-        ) : (
-          <View style={[styles.grip, { backgroundColor: t.line }]} />
-        )}
+        {banner ? null : <View style={[styles.grip, { backgroundColor: t.line }]} />}
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          {/* Баннер внутри прокрутки: аватарка ложится на его край и не обрезается */}
+          {banner ? (
+            <View style={styles.bannerWrap}>
+              <Image source={{ uri: banner }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+              <View style={[styles.grip, styles.gripOnBanner]} />
+            </View>
+          ) : null}
           <View style={[styles.head, banner ? styles.headOnBanner : null]}>
             <View style={[styles.avatar, { backgroundColor: color }, banner ? [styles.avatarOnBanner, { borderColor: t.bg }] : null]}>
               {avatar ? (
@@ -193,8 +196,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     overflow: 'hidden',
   },
-  banner: { height: 120, marginTop: -10, marginBottom: space.s },
-  headOnBanner: { marginTop: -46, alignItems: 'flex-end' },
+  bannerWrap: { height: 130, marginTop: -10, marginHorizontal: -space.m, marginBottom: -space.l },
+  gripOnBanner: { marginTop: 10, backgroundColor: 'rgba(255,255,255,0.8)' },
+  headOnBanner: { marginTop: -26, alignItems: 'flex-end' },
   avatarOnBanner: { width: 72, height: 72, borderRadius: 36, borderWidth: 4 },
   avatarImage: { width: '100%', height: '100%' },
   grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: space.s },
