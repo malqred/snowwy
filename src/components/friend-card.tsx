@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,7 +10,7 @@ import { distance, int, kmh, span } from '@/lib/format';
 import { relativeLong, type Relative } from '@/lib/relative';
 import { space, useTheme } from '@/theme';
 
-import { CATEGORIES, earnedFromLevels, TOTAL_ACHIEVEMENTS } from '@/lib/achievements';
+import { achievementTitle, CATEGORIES, earnedFromLevels, TOTAL_ACHIEVEMENTS } from '@/lib/achievements';
 
 import { AchievementBadge } from './achievement-badge';
 import { Battery } from './battery';
@@ -45,6 +46,7 @@ const firstLetter = (name: string) => (Array.from(name.trim())[0] ?? '?').toUppe
 export function FriendCard({ member, color, status, age, where, onShowOnMap, onClose, now, avatar = '', banner = '', own }: Props) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const [allBadges, setAllBadges] = useState(false);
   if (!member) return null;
   const loading = own?.info === 'loading';
   const info = own ? (own.info === 'loading' ? null : own.info) : member.info;
@@ -73,9 +75,20 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={styles.shade} onPress={onClose} accessibilityLabel="Закрыть карточку" />
-      <View style={[styles.sheet, { backgroundColor: t.bg, borderColor: t.line, paddingBottom: insets.bottom + space.m }]}>
+      <View
+        style={[
+          styles.sheet,
+          // С баннером он сам начинается у края, без полосы фона над ним
+          banner ? styles.sheetWithBanner : null,
+          { backgroundColor: t.bg, borderColor: t.line, paddingBottom: insets.bottom + space.m },
+        ]}>
         {banner ? null : <View style={[styles.grip, { backgroundColor: t.line }]} />}
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        {/* Без «резинки» у краёв: иначе при потягивании баннер уезжал и под ним открывался пустой фон */}
+        <ScrollView
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never">
           {/* Баннер внутри прокрутки: аватарка ложится на его край и не обрезается */}
           {banner ? (
             <View style={styles.bannerWrap}>
@@ -154,7 +167,42 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
                   <Label>
                     Достижения · {earnedFromLevels(info.ach).length} из {TOTAL_ACHIEVEMENTS}
                   </Label>
-                  {earnedFromLevels(info.ach).length > 0 ? (
+                  {allBadges ? (
+                    // Все 45: полученные цветные, остальные приглушённые
+                    CATEGORIES.map((c) => {
+                      const n = info.ach?.[c.id] ?? 0;
+                      return (
+                        <View key={c.id} style={styles.category}>
+                          <View style={styles.categoryHead}>
+                            <Text style={[styles.categoryTitle, { color: t.text }]}>{c.title}</Text>
+                            <Text style={[styles.categoryCount, { color: t.sub }]}>
+                              {n} из {c.levels.length}
+                            </Text>
+                          </View>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badges}>
+                            {c.levels.map((value, index) => (
+                              <Pressable
+                                key={value}
+                                onPress={() =>
+                                  Alert.alert(achievementTitle(c.id, value), index < n ? 'Получено.' : 'Ещё не получено.')
+                                }
+                                accessibilityRole="button"
+                                accessibilityLabel={`${achievementTitle(c.id, value)}${index < n ? ', получено' : ', не получено'}`}>
+                                <AchievementBadge
+                                  category={c.id}
+                                  value={value}
+                                  index={index}
+                                  count={c.levels.length}
+                                  locked={index >= n}
+                                  size={56}
+                                />
+                              </Pressable>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      );
+                    })
+                  ) : earnedFromLevels(info.ach).length > 0 ? (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badges}>
                       {CATEGORIES.map((c) => {
                         // В карточке — старший значок каждой категории
@@ -164,9 +212,9 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
                         return (
                           <Pressable
                             key={c.id}
-                            onPress={() => Alert.alert(c.title, `Получено ${n} из ${c.levels.length}.`)}
+                            onPress={() => setAllBadges(true)}
                             accessibilityRole="button"
-                            accessibilityLabel={`${c.title}: ${n} из ${c.levels.length}`}>
+                            accessibilityLabel={`${c.title}: ${n} из ${c.levels.length}. Показать все достижения`}>
                             <AchievementBadge category={c.id} value={value} index={n - 1} count={c.levels.length} size={60} />
                           </Pressable>
                         );
@@ -175,6 +223,11 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
                   ) : (
                     <Text style={[styles.note, { color: t.sub }]}>Пока ни одного.</Text>
                   )}
+                  <Pressable onPress={() => setAllBadges((v) => !v)} hitSlop={8} accessibilityRole="button">
+                    <Text style={[styles.link, { color: t.text }]}>
+                      {allBadges ? 'Свернуть' : `Все достижения · ${TOTAL_ACHIEVEMENTS}`}
+                    </Text>
+                  </Pressable>
                 </View>
               ) : null}
               {recordItems.length > 0 && rec && rec.maxSpeed > 0 ? (
@@ -214,7 +267,8 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     overflow: 'hidden',
   },
-  bannerWrap: { height: 130, marginTop: -10, marginHorizontal: -space.m, marginBottom: -space.l },
+  sheetWithBanner: { paddingTop: 0 },
+  bannerWrap: { height: 140, marginHorizontal: -space.m, marginBottom: -space.l },
   gripOnBanner: { marginTop: 10, backgroundColor: 'rgba(255,255,255,0.8)' },
   headOnBanner: { marginTop: -26, alignItems: 'flex-end' },
   avatarOnBanner: { width: 72, height: 72, borderRadius: 36, borderWidth: 4 },
@@ -233,4 +287,9 @@ const styles = StyleSheet.create({
   section: { gap: space.s },
   note: { fontSize: 14, lineHeight: 20 },
   badges: { gap: 4 },
+  link: { fontSize: 15, fontWeight: '600', paddingVertical: 2 },
+  category: { gap: 6 },
+  categoryHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  categoryTitle: { fontSize: 14, fontWeight: '600' },
+  categoryCount: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });
