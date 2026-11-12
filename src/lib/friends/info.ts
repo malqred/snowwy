@@ -2,6 +2,7 @@
 // Подключается к хранилищу группы при запуске приложения (см. src/app/_layout.tsx).
 import * as Battery from 'expo-battery';
 
+import { computeAchievements, levelsOf, type AchievementLevels } from '../achievements';
 import { listSessions } from '../db';
 import { getTracker } from '../tracker';
 import type { Session, Totals } from '../types';
@@ -17,6 +18,7 @@ export function dayKey(ts: number): string {
 const SESSIONS_EVERY = 5 * 60 * 1000;
 let sessions: Session[] = [];
 let sessionsAt = 0;
+let levels: AchievementLevels = {};
 
 async function battery(): Promise<{ bat: number | null; chg: boolean }> {
   try {
@@ -53,6 +55,8 @@ export async function buildFriendInfo(fresh = false): Promise<FriendInfo> {
     try {
       sessions = await listSessions();
       sessionsAt = now;
+      // Достижения — только по готовым итогам, без разбора точек: сводка должна собираться быстро
+      levels = levelsOf(await computeAchievements(sessions, true));
     } catch {
       // база недоступна — пошлём, что есть
     }
@@ -79,7 +83,7 @@ export async function buildFriendInfo(fresh = false): Promise<FriendInfo> {
   }
   // Рекорд перепада за день — с учётом всех записей сегодняшнего дня
   rec.dayVertical = Math.max(rec.dayVertical, todayVertical);
-  return { ...(await battery()), day: day.runs > 0 || day.runTime > 0 ? day : null, rec };
+  return { ...(await battery()), day: day.runs > 0 || day.runTime > 0 ? day : null, rec, ach: levels };
 }
 
 setInfoProvider(buildFriendInfo);

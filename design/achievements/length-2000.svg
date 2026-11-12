@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="132" viewBox="0 0 120 132" role="img" aria-label="Длина спуска: 2 км">
+  <defs>
+    <linearGradient id="f-length-2000" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBE39A"/>
+      
+      <stop offset="1" stop-color="#C48A1E"/>
+    </linearGradient>
+    <linearGradient id="s-length-2000" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  
+  <path d="M47.88 11.00 Q60.00 4.00 72.12 11.00 L101.57 28.00 Q113.69 35.00 113.69 49.00 L113.69 83.00 Q113.69 97.00 101.57 104.00 L72.12 121.00 Q60.00 128.00 47.88 121.00 L18.43 104.00 Q6.31 97.00 6.31 83.00 L6.31 49.00 Q6.31 35.00 18.43 28.00 Z" fill="#C48A1E"/>
+  <path d="M47.88 11.00 Q60.00 4.00 72.12 11.00 L101.57 28.00 Q113.69 35.00 113.69 49.00 L113.69 83.00 Q113.69 97.00 101.57 104.00 L72.12 121.00 Q60.00 128.00 47.88 121.00 L18.43 104.00 Q6.31 97.00 6.31 83.00 L6.31 49.00 Q6.31 35.00 18.43 28.00 Z" fill="none" stroke="#FFF4CF" stroke-opacity="0.9" stroke-width="2"/>
+  <path d="M50.47 17.50 Q60.00 12.00 69.53 17.50 L97.24 33.50 Q106.77 39.00 106.77 50.00 L106.77 82.00 Q106.77 93.00 97.24 98.50 L69.53 114.50 Q60.00 120.00 50.47 114.50 L22.76 98.50 Q13.23 93.00 13.23 82.00 L13.23 50.00 Q13.23 39.00 22.76 33.50 Z" fill="url(#f-length-2000)"/>
+  <path d="M50.47 17.50 Q60.00 12.00 69.53 17.50 L97.24 33.50 Q106.77 39.00 106.77 50.00 L106.77 82.00 Q106.77 93.00 97.24 98.50 L69.53 114.50 Q60.00 120.00 50.47 114.50 L22.76 98.50 Q13.23 93.00 13.23 82.00 L13.23 50.00 Q13.23 39.00 22.76 33.50 Z" fill="url(#s-length-2000)"/>
+  <path d="M50.47 17.50 Q60.00 12.00 69.53 17.50 L97.24 33.50 Q106.77 39.00 106.77 50.00 L106.77 82.00 Q106.77 93.00 97.24 98.50 L69.53 114.50 Q60.00 120.00 50.47 114.50 L22.76 98.50 Q13.23 93.00 13.23 82.00 L13.23 50.00 Q13.23 39.00 22.76 33.50 Z" fill="none" stroke="#FFF4CF" stroke-opacity="0.6" stroke-width="1"/>
+  
+  <g transform="translate(47 24) scale(1.0833333333333333)" fill="none" stroke="#3D2A05" stroke-width="1.8653846153846154" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></g>
+  <text x="60" y="82" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', Roboto, 'Segoe UI', sans-serif" font-weight="800" font-size="32" letter-spacing="-0.5" fill="#3D2A05">2</text>
+  <text x="60" y="99" text-anchor="middle" font-family="-apple-system, 'SF Pro Text', Roboto, 'Segoe UI', sans-serif" font-weight="700" font-size="11" letter-spacing="0.6" fill="#3D2A05" fill-opacity="0.75">КМ</text>
+</svg>

@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 
 import { time } from '../format';
 import { cancelNotify, notifyLater, notifyNow } from '../notify';
+import { CATEGORIES, type AchievementLevels } from '../achievements';
 import { getSettings, updateSettings } from '../settings';
 import { ApiError, call } from './api';
 import { ensureServer } from './cloudflare';
@@ -80,6 +81,8 @@ export type FriendInfo = {
   chg: boolean;
   day: FriendDay | null;
   rec: FriendRecords | null;
+  /** Сколько ступеней каждой категории достижений получено; нет у версий до 1.0.4 */
+  ach: AchievementLevels | null;
 };
 
 /** Точка встречи группы. */
@@ -209,7 +212,18 @@ function readInfo(raw: Partial<FriendInfo> | null): FriendInfo | null {
           dayVertical: num(rec.dayVertical),
         }
       : null,
+    ach: readLevels(raw.ach),
   };
+}
+
+function readLevels(raw: unknown): AchievementLevels | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const out: AchievementLevels = {};
+  for (const c of CATEGORIES) {
+    const v = (raw as Record<string, unknown>)[c.id];
+    if (typeof v === 'number' && isFinite(v)) out[c.id] = Math.max(0, Math.min(c.levels.length, Math.round(v)));
+  }
+  return out;
 }
 
 /** Напоминания о встрече: за 20 минут и в само время */

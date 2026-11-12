@@ -3,11 +3,11 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Chevron, Label, Screen, StatStrip, Title, useOnAccent } from '@/components/ui';
+import { RecordsBlock } from '@/components/records-block';
+import { Card, Chevron, Screen, StatStrip, Title } from '@/components/ui';
 import { listSessions } from '@/lib/db';
 import { difficultyInfo, favoritePistes } from '@/lib/pistes';
-import { findRecords } from '@/lib/records';
-import { clock, dateIso, dateLong, dateParts, dateShort, daysWord, int, km, kmh, plural, runsWord, seasonOf, seasonTitle, span } from '@/lib/format';
+import { clock, dateIso, dateParts, daysWord, int, km, kmh, plural, runsWord, seasonOf, seasonTitle, span } from '@/lib/format';
 import type { Session } from '@/lib/types';
 import { space, useTheme } from '@/theme';
 
@@ -48,18 +48,9 @@ function seasonStats(sessions: Session[]) {
   };
 }
 
-/** Короткие подписи рекордов для маленьких плиток */
-const SHORT: Record<string, string> = {
-  longestRun: 'Длина спуска',
-  biggestRunVertical: 'Перепад за спуск',
-  runs: 'Спусков за день',
-  distance: 'Путь за день',
-  vertical: 'Перепад за день',
-};
 
 export default function HistoryScreen() {
   const t = useTheme();
-  const onAccent = useOnAccent();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[] | null>(null);
@@ -81,10 +72,6 @@ export default function HistoryScreen() {
   );
 
   const seasons = groupBySeason(sessions ?? []);
-  const records = findRecords(sessions ?? []);
-  // Главный рекорд — скорость; он один на экране выделен цветом
-  const main = records.find((r) => r.key === 'maxSpeed');
-  const rest = records.filter((r) => r !== main);
   const open = (id: number) => router.push(`/session/${id}`);
   const favorites = favoritePistes((sessions ?? []).map((s) => s.pistes ?? []));
 
@@ -101,51 +88,7 @@ export default function HistoryScreen() {
         </View>
       ) : null}
 
-      {records.length > 0 ? (
-        <View style={styles.block}>
-          <Text style={[styles.sectionTitle, styles.recordsTitle, { color: t.text }]}>Рекорды</Text>
-          {main ? (
-            <Pressable
-              onPress={() => open(main.sessionId)}
-              accessibilityRole="button"
-              style={({ pressed }) => pressed && { opacity: 0.7 }}>
-              <Card accent style={styles.hero}>
-                <View style={styles.heroBody}>
-                  <Label color={onAccent}>Скорость</Label>
-                  <Text style={[styles.heroValue, { color: onAccent }]} numberOfLines={1} adjustsFontSizeToFit>
-                    {main.value}
-                    <Text style={styles.heroUnit}> {main.unit}</Text>
-                  </Text>
-                </View>
-                <Text style={[styles.heroDate, { color: onAccent }]}>{dateLong(main.startedAt)}</Text>
-              </Card>
-            </Pressable>
-          ) : null}
-          <View style={styles.records}>
-            {rest.map((r) => (
-              <Pressable
-                key={r.key}
-                onPress={() => open(r.sessionId)}
-                accessibilityRole="button"
-                accessibilityLabel={r.label}
-                style={({ pressed }) => [styles.record, pressed && { opacity: 0.6 }]}>
-                <Card quiet style={styles.recordTile}>
-                  <Text style={[styles.recordLabel, { color: t.sub }]} numberOfLines={1} adjustsFontSizeToFit>
-                    {SHORT[r.key] ?? r.label}
-                  </Text>
-                  <Text style={[styles.recordValue, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit>
-                    {r.value}
-                    {r.unit ? <Text style={[styles.recordUnit, { color: t.sub }]}> {r.unit}</Text> : null}
-                  </Text>
-                  <Text style={[styles.recordDate, { color: t.sub }]} numberOfLines={1}>
-                    {dateShort(r.startedAt)}
-                  </Text>
-                </Card>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ) : null}
+      <RecordsBlock sessions={sessions ?? []} />
 
       {favorites.length > 0 ? (
         <View style={styles.block}>

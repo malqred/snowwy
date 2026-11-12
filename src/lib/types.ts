@@ -66,6 +66,8 @@ export type Totals = {
   /** Самый длинный спуск, м, и самый большой перепад одного спуска, м. В старых записях их нет. */
   longestRun?: number;
   biggestRunVertical?: number;
+  /** Лучшая средняя скорость одного спуска длиной от 300 м, м/с. Нет в записях до 1.0.4. */
+  bestRunAvgSpeed?: number;
 };
 
 export type Analysis = {

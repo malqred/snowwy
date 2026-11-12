@@ -493,10 +493,13 @@ export function analyze(points: TrackPoint[]): Analysis {
   let liftTime = 0;
   let longestRun = 0;
   let biggestRunVertical = 0;
+  let bestRunAvgSpeed = 0;
   for (const s of segments) {
     if (s.kind === 'run') {
       if (s.distance > longestRun) longestRun = s.distance;
       if (s.vertical > biggestRunVertical) biggestRunVertical = s.vertical;
+      // Средняя скорость короткого съезда — случайность, в зачёт идут спуски от 300 м
+      if (s.distance >= 300 && s.avgSpeed > bestRunAvgSpeed) bestRunAvgSpeed = s.avgSpeed;
       distance += s.distance;
       vertical += s.vertical;
       runTime += s.duration;
@@ -536,6 +539,7 @@ export function analyze(points: TrackPoint[]): Analysis {
       minAlt,
       longestRun,
       biggestRunVertical,
+      bestRunAvgSpeed,
     },
     state,
     alt,

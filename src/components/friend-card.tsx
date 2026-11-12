@@ -1,4 +1,4 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dayKey } from '@/lib/friends/info';
@@ -8,6 +8,9 @@ import { distance, int, kmh, span } from '@/lib/format';
 import { relativeLong, type Relative } from '@/lib/relative';
 import { space, useTheme } from '@/theme';
 
+import { CATEGORIES, earnedFromLevels, TOTAL_ACHIEVEMENTS } from '@/lib/achievements';
+
+import { AchievementBadge } from './achievement-badge';
 import { Battery } from './battery';
 import { MapPin } from './icons';
 import { Button, ICON_STROKE, Label, StatGrid, type StatItem } from './ui';
@@ -113,6 +116,34 @@ export function FriendCard({ member, color, status, age, where, onShowOnMap, onC
                   <Text style={[styles.note, { color: t.sub }]}>Сегодня ещё не катался.</Text>
                 )}
               </View>
+              {info.ach ? (
+                <View style={styles.section}>
+                  <Label>
+                    Достижения · {earnedFromLevels(info.ach).length} из {TOTAL_ACHIEVEMENTS}
+                  </Label>
+                  {earnedFromLevels(info.ach).length > 0 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badges}>
+                      {CATEGORIES.map((c) => {
+                        // В карточке — старший значок каждой категории
+                        const n = info.ach?.[c.id] ?? 0;
+                        if (n <= 0) return null;
+                        const value = c.levels[n - 1];
+                        return (
+                          <Pressable
+                            key={c.id}
+                            onPress={() => Alert.alert(c.title, `Получено ${n} из ${c.levels.length}.`)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${c.title}: ${n} из ${c.levels.length}`}>
+                            <AchievementBadge category={c.id} value={value} index={n - 1} count={c.levels.length} size={60} />
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  ) : (
+                    <Text style={[styles.note, { color: t.sub }]}>Пока ни одного.</Text>
+                  )}
+                </View>
+              ) : null}
               {recordItems.length > 0 && rec && rec.maxSpeed > 0 ? (
                 <View style={styles.section}>
                   <Label>Рекорды</Label>
@@ -162,4 +193,5 @@ const styles = StyleSheet.create({
   factText: { fontSize: 15, flexShrink: 1 },
   section: { gap: space.s },
   note: { fontSize: 14, lineHeight: 20 },
+  badges: { gap: 4 },
 });
