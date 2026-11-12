@@ -3,12 +3,13 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Field } from '@/components/field';
-import { Flag, Minus, Plus } from '@/components/icons';
+import { Flag } from '@/components/icons';
 import { TrackMap } from '@/components/track-map';
-import { Button, Card, ICON_STROKE, Label, Screen } from '@/components/ui';
+import { Button, Card, Label, Screen } from '@/components/ui';
+import { WheelTime } from '@/components/wheel-time';
 import { errorText } from '@/lib/friends/api';
 import { createMeet, MEET_TEXT_MAX, OldServerError, useFriends } from '@/lib/friends/store';
-import { inTime, time } from '@/lib/format';
+import { inTime, nextAt } from '@/lib/format';
 import type { Coord } from '@/lib/lines';
 import { ensureNotifyPermission } from '@/lib/notify';
 import { useMySpot } from '@/lib/relative';
@@ -50,7 +51,8 @@ export default function MeetScreen() {
       dim: !m.me && i >= 0,
     }));
 
-  const shift = (minutes: number) => setAt((v) => Math.max(roundUp(Date.now() + STEP), v + minutes * MINUTE));
+  const atDate = new Date(at);
+  const tomorrow = new Date(at).getDate() !== new Date(now).getDate();
 
   const submit = async () => {
     if (!chosen) {
@@ -101,16 +103,15 @@ export default function MeetScreen() {
       <View style={styles.section}>
         <Label>Когда</Label>
         <Card style={styles.when}>
-          <Pressable onPress={() => shift(-5)} hitSlop={8} accessibilityRole="button" accessibilityLabel="На 5 минут раньше" style={styles.step}>
-            <Minus size={22} color={t.text} strokeWidth={ICON_STROKE} />
-          </Pressable>
-          <View style={styles.whenBody}>
-            <Text style={[styles.clock, { color: t.text }]}>{time(at)}</Text>
-            <Text style={[styles.note, { color: t.sub }]}>{inTime(at - now)}</Text>
-          </View>
-          <Pressable onPress={() => shift(5)} hitSlop={8} accessibilityRole="button" accessibilityLabel="На 5 минут позже" style={styles.step}>
-            <Plus size={22} color={t.text} strokeWidth={ICON_STROKE} />
-          </Pressable>
+          <WheelTime
+            hour={atDate.getHours()}
+            minute={atDate.getMinutes()}
+            onChange={(h, m) => setAt(nextAt(h, m, Date.now()))}
+          />
+          <Text style={[styles.note, styles.whenNote, { color: t.sub }]}>
+            {tomorrow ? 'завтра, ' : ''}
+            {inTime(at - now)}
+          </Text>
         </Card>
         <View style={styles.chips}>
           {[15, 30, 60, 120].map((m) => (
@@ -141,10 +142,8 @@ const styles = StyleSheet.create({
   section: { gap: space.s },
   map: { height: 300 },
   note: { fontSize: 13, lineHeight: 18 },
-  when: { flexDirection: 'row', alignItems: 'center', padding: space.s },
-  whenBody: { flex: 1, alignItems: 'center', gap: 2 },
-  clock: { fontSize: 34, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  step: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
+  when: { paddingVertical: space.s },
+  whenNote: { textAlign: 'center', marginTop: 2 },
   chips: { flexDirection: 'row', gap: 8 },
   chip: { flex: 1, height: 40, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   chipText: { fontSize: 15, fontWeight: '600' },

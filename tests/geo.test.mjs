@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { batteryColor, far, relative, relativeLong, relativeShort, side } from '../src/lib/geo.ts';
-import { inTime } from '../src/lib/format.ts';
+import { inTime, nextAt } from '../src/lib/format.ts';
 
 const ME = { lat: 43.65, lon: 40.31, alt: 1500 };
 
@@ -61,6 +61,24 @@ test('цвет заряда', () => {
   assert.equal(batteryColor(50), '#F0A23B');
   assert.equal(batteryColor(51), '#4CB05A');
   assert.equal(batteryColor(100), '#4CB05A');
+});
+
+test('время встречи с колёс: сегодня, если ещё не прошло, иначе завтра', () => {
+  const now = new Date(2026, 10, 12, 21, 43, 30).getTime();
+  const at = (h, m) => new Date(nextAt(h, m, now));
+  assert.equal(at(22, 25).getDate(), 12);
+  assert.equal(at(22, 25).getHours(), 22);
+  assert.equal(at(22, 25).getMinutes(), 25);
+  assert.equal(at(22, 25).getSeconds(), 0);
+  assert.equal(at(21, 44).getDate(), 12, 'через минуту — сегодня');
+  assert.equal(at(21, 43).getDate(), 13, 'уже идущая минута — завтра');
+  assert.equal(at(9, 0).getDate(), 13, 'утро — завтра');
+  assert.equal(at(0, 5).getDate(), 13, 'после полуночи — завтра');
+  // Переход через конец месяца
+  const lastDay = new Date(2026, 10, 30, 23, 50).getTime();
+  const next = new Date(nextAt(0, 10, lastDay));
+  assert.equal(next.getMonth(), 11);
+  assert.equal(next.getDate(), 1);
 });
 
 test('сколько до встречи', () => {

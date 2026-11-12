@@ -61,6 +61,17 @@ export function inTime(ms: number): string {
   return h === 0 ? `через ${m} мин` : m === 0 ? `через ${h} ч` : `через ${h} ч ${m} мин`;
 }
 
+/**
+ * Ближайший момент с этими часами и минутами: сегодня, если ещё не прошёл, иначе завтра.
+ * Время берётся по часам телефона.
+ */
+export function nextAt(hour: number, minute: number, now: number): number {
+  const d = new Date(now);
+  d.setHours(hour, minute, 0, 0);
+  if (d.getTime() <= now) d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+
 /** Время суток: 10:42. */
 export function time(ts: number): string {
   const d = new Date(ts);
